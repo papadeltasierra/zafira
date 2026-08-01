@@ -1,0 +1,6 @@
+-mlongcalls
+-fno-builtin-memcpy
+-fno-builtin-memset
+-fno-builtin-bzero
+"-specs=C:/Users/paul_/git/zafira/build/specs/picolibc.specs"
+-fno-rtti

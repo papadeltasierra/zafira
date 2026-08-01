@@ -1,0 +1,24 @@
+menu "Zafira BLE Endpoint"
+
+config ZAFIRA_BLE_DEVICE_NAME
+    string "BLE advertised device name"
+    default "Zafira"
+    help
+        Name shown when this ESP32-S3 advertises over BLE.
+
+config ZAFIRA_BLE_PROFILE_UUID
+    string "BLE profile UUID (128-bit canonical format)"
+    default "99999999-9999-9999-9999-999999999999"
+    help
+        128-bit UUID used as the custom BLE service identifier.
+        Format must match xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.
+
+config ZAFIRA_BLE_MTU
+    int "BLE ATT MTU size (bytes)"
+    default 67
+    range 23 256
+    help
+        Preferred ATT MTU negotiated on each connection.
+        The peer may agree on a smaller value.
+
+endmenu

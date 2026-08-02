@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="md_theme_on_primary">#FFFFFF</color>
+    <color name="md_theme_primary">#1565C0</color>
+    <color name="md_theme_surface">#FFFBFE</color>
+    <color name="seed">#1565C0</color>
+    <string name="action_settings">Settings</string>
+    <string name="app_name">Zafira</string>
+    <string name="configured">Configuration: OK</string>
+    <string name="enable_service">Enable monitoring service</string>
+    <string name="error_invalid_mac">Invalid MAC address format (expected XX:XX:XX:XX:XX:XX)</string>
+    <string name="error_output_required">Enter MAC address or device name for output device</string>
+    <string name="error_pioneer_required">Enter MAC address or device name for Pioneer radio</string>
+    <string name="hint_output_mac">Output device MAC address</string>
+    <string name="hint_output_name">Output device BLE name</string>
+    <string name="hint_pioneer_mac">Pioneer MAC address (e.g. AA:BB:CC:DD:EE:FF)</string>
+    <string name="hint_pioneer_name">Pioneer device name (e.g. Pioneer AVIC-Z920DAB)</string>
+    <string name="hint_snoop_path">Fallback file path (Android &lt; 16)</string>
+    <string name="hint_snoop_socket">Snoop socket name (Android 16+, default: bthcisnoop)</string>
+    <string name="not_configured">Configuration: not set up — tap ⋮ → Settings</string>
+    <string name="now_playing">Now playing / active</string>
+    <string name="output_ble_status">Output BLE device</string>
+    <string name="perm_all_files_button">Open Settings</string>
+    <string name="perm_all_files_msg">Grant \'Manage all files\' permission so the app can read the btsnoop HCI log.</string>
+    <string name="perm_all_files_title">File access required</string>
+    <string name="save_settings">Save</string>
+    <string name="section_output">Output BLE Device (receives media info)</string>
+    <string name="section_pioneer">Pioneer Radio (identify by MAC and/or name)</string>
+    <string name="section_snoop">HCI Snoop (Bluetooth packet capture)</string>
+    <string name="settings_saved">Settings saved</string>
+    <string name="snoop_hint_body">Android 16: enable “Bluetooth HCI snoop socket” in Developer Options and enter the socket name below.\nOlder Android: enable “Bluetooth HCI snoop log” and enter the file path.</string>
+    <string name="title_setup">Setup</string>
+    <string name="use_default_path">Use default path</string>
+    <style name="Theme.PioneerMediaBridge" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/md_theme_primary</item>
+        <item name="colorOnPrimary">@color/md_theme_on_primary</item>
+    </style>
+</resources>

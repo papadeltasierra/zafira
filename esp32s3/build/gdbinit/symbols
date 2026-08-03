@@ -13,8 +13,8 @@ end
 
 # Load bootloader symbols
 set confirm off
-    add-symbol-file C:/Users/paul_/git/zafira/build/bootloader/bootloader.elf
+    add-symbol-file C:/Users/paul_/git/zafira/esp32s3/build/bootloader/bootloader.elf
 set confirm on
 
 # Load application symbols
-file C:/Users/paul_/git/zafira/build/zafira_ble_endpoint.elf
+file C:/Users/paul_/git/zafira/esp32s3/build/zafira_ble_endpoint.elf

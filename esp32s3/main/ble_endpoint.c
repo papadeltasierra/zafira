@@ -13,6 +13,8 @@
 #include "nimble/nimble_port.h"
 #include "nimble/nimble_port_freertos.h"
 #include "nvs_flash.h"
+#include "store/config/ble_store_config.h"
+#include "store/util/ble_store_util.h"
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
 
@@ -23,6 +25,20 @@ static uint8_t s_addr_type;
 static ble_uuid128_t s_service_uuid;
 static ble_uuid128_t s_media_info_char_uuid;
 static ble_uuid128_t s_time_sync_char_uuid;
+
+static void log_bonded_peer_count(void)
+{
+    ble_addr_t peers[CONFIG_BT_NIMBLE_MAX_BONDS];
+    int peer_count = CONFIG_BT_NIMBLE_MAX_BONDS;
+    int rc = ble_store_util_bonded_peers(peers, &peer_count, CONFIG_BT_NIMBLE_MAX_BONDS);
+    if (rc != 0)
+    {
+        ESP_LOGW(TAG, "Failed to query bonded peer count, rc=%d", rc);
+        return;
+    }
+
+    ESP_LOGI(TAG, "Bonded peer count in NVS: %d", peer_count);
+}
 
 typedef enum
 {
@@ -281,8 +297,41 @@ static int gap_event(struct ble_gap_event *event, void *arg)
         break;
 
     case BLE_GAP_EVENT_ENC_CHANGE:
-        ESP_LOGI(TAG, "Encryption change (handle=%d, status=%d)",
-                 event->enc_change.conn_handle, event->enc_change.status);
+    {
+        struct ble_gap_conn_desc desc;
+        int rc = ble_gap_conn_find(event->enc_change.conn_handle, &desc);
+        if (rc == 0)
+        {
+            ESP_LOGI(TAG,
+                     "Encryption change (handle=%d, status=%d, encrypted=%d, bonded=%d, key_size=%d)",
+                     event->enc_change.conn_handle,
+                     event->enc_change.status,
+                     desc.sec_state.encrypted,
+                     desc.sec_state.bonded,
+                     desc.sec_state.key_size);
+        }
+        else
+        {
+            ESP_LOGI(TAG,
+                     "Encryption change (handle=%d, status=%d) (conn_desc unavailable rc=%d)",
+                     event->enc_change.conn_handle,
+                     event->enc_change.status,
+                     rc);
+        }
+        break;
+    }
+
+    case BLE_GAP_EVENT_PAIRING_COMPLETE:
+        ESP_LOGI(TAG,
+                 "Pairing complete (handle=%d, status=%d, bonded=%d)",
+                 event->pairing_complete.conn_handle,
+                 event->pairing_complete.status,
+                 event->pairing_complete.bonded);
+        log_bonded_peer_count();
+        break;
+
+    case BLE_GAP_EVENT_IDENTITY_RESOLVED:
+        ESP_LOGI(TAG, "Identity resolved for peer after RPA/private address rotation");
         break;
 
     case BLE_GAP_EVENT_REPEAT_PAIRING:
@@ -291,6 +340,9 @@ static int gap_event(struct ble_gap_event *event, void *arg)
         struct ble_gap_conn_desc desc;
         int rc = ble_gap_conn_find(event->repeat_pairing.conn_handle, &desc);
         assert(rc == 0);
+        ESP_LOGW(TAG,
+                 "Repeat pairing requested for peer; deleting stored keys and retrying (conn_handle=%d)",
+                 event->repeat_pairing.conn_handle);
         ble_store_util_delete_peer(&desc.peer_id_addr);
         return BLE_GAP_REPEAT_PAIRING_RETRY;
     }
@@ -402,6 +454,16 @@ void app_main(void)
     s_time_sync_char_uuid.value[0] = 0x03;
 
     nimble_port_init();
+
+#if CONFIG_BT_NIMBLE_NVS_PERSIST
+    ESP_LOGI(TAG, "NimBLE key persistence: ENABLED (NVS-backed)");
+#else
+    ESP_LOGW(TAG, "NimBLE key persistence: DISABLED (bond keys will not survive reboot)");
+#endif
+
+    ble_store_config_init();
+    ESP_LOGI(TAG, "NimBLE key store initialized");
+    log_bonded_peer_count();
 
     ble_hs_cfg.sync_cb = ble_app_on_sync;
 

@@ -32,7 +32,6 @@ class SetupActivity : AppCompatActivity() {
                     if (!binding.editOutputMac.isFocused) binding.editOutputMac.setText(s.outputBleMac)
                     if (!binding.editOutputName.isFocused) binding.editOutputName.setText(s.outputBleName)
                     if (!binding.editSnoopPath.isFocused) binding.editSnoopPath.setText(s.snoopFilePath)
-                    if (!binding.editSnoopSocket.isFocused) binding.editSnoopSocket.setText(s.snoopSocketName)
                 }
             }
         }
@@ -49,7 +48,6 @@ class SetupActivity : AppCompatActivity() {
         val outputMac = binding.editOutputMac.text.toString().trim()
         val outputName = binding.editOutputName.text.toString().trim()
         val snoopPath = binding.editSnoopPath.text.toString().trim()
-        val snoopSocket = binding.editSnoopSocket.text.toString().trim()
 
         if (pioneerMac.isEmpty() && pioneerName.isEmpty()) {
             binding.editPioneerMac.error = getString(R.string.error_pioneer_required)
@@ -68,7 +66,7 @@ class SetupActivity : AppCompatActivity() {
             return
         }
 
-        viewModel.save(pioneerMac, pioneerName, outputMac, outputName, snoopPath, snoopSocket)
+        viewModel.save(pioneerMac, pioneerName, outputMac, outputName, snoopPath)
         Toast.makeText(this, R.string.settings_saved, Toast.LENGTH_SHORT).show()
         finish()
     }

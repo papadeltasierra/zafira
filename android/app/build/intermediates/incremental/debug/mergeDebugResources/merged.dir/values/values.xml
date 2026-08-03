@@ -2022,7 +2022,6 @@
     <string name="hint_pioneer_mac">Pioneer MAC address (e.g. AA:BB:CC:DD:EE:FF)</string>
     <string name="hint_pioneer_name">Pioneer device name (e.g. Pioneer AVIC-Z920DAB)</string>
     <string name="hint_snoop_path">Fallback file path (Android &lt; 16)</string>
-    <string name="hint_snoop_socket">Snoop socket name (Android 16+, default: bthcisnoop)</string>
     <string description="Content description for an icon that appears in the title area of a dialog" name="icon_content_description">Dialog Icon</string>
     <string name="item_view_role_description">Tab</string>
     <string name="m3_exceed_max_badge_text_suffix" translatable="false"><ns2:g example="Some te" id="part of a long text">%1$s</ns2:g><ns2:g example="…" id="suffix">%2$s</ns2:g></string>
@@ -2155,7 +2154,7 @@
     <string name="settings_saved">Settings saved</string>
     <string description="Title of the side sheet&apos;s accessibility pane that is spoken by TalkBack when the side sheet appears on screen. [CHAR_LIMIT=NONE]" name="side_sheet_accessibility_pane_title">Side Sheet</string>
     <string name="side_sheet_behavior" translatable="false">com.google.android.material.sidesheet.SideSheetBehavior</string>
-    <string name="snoop_hint_body">Android 16: enable “Bluetooth HCI snoop socket” in Developer Options and enter the socket name below.\nOlder Android: enable “Bluetooth HCI snoop log” and enter the file path.</string>
+    <string name="snoop_hint_body">Android 16: enable “Bluetooth HCI snoop socket” in Developer Options. This app connects to localhost:8872 automatically.\nOlder Android: enable “Bluetooth HCI snoop log” and enter the file path.</string>
     <string name="status_bar_notification_info_overflow">999+</string>
     <string name="title_setup">Setup</string>
     <string name="use_default_path">Use default path</string>

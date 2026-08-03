@@ -17,7 +17,6 @@ class SettingsRepository(private val context: Context) {
         val KEY_OUTPUT_BLE_MAC = stringPreferencesKey("output_ble_mac")
         val KEY_OUTPUT_BLE_NAME = stringPreferencesKey("output_ble_name")
         val KEY_SNOOP_FILE_PATH = stringPreferencesKey("snoop_file_path")
-        val KEY_SNOOP_SOCKET_NAME = stringPreferencesKey("snoop_socket_name")
         val KEY_SERVICE_ENABLED = booleanPreferencesKey("service_enabled")
     }
 
@@ -28,7 +27,6 @@ class SettingsRepository(private val context: Context) {
             outputBleMac = prefs[KEY_OUTPUT_BLE_MAC] ?: "",
             outputBleName = prefs[KEY_OUTPUT_BLE_NAME] ?: "",
             snoopFilePath = prefs[KEY_SNOOP_FILE_PATH] ?: AppSettings.DEFAULT_SNOOP_PATH,
-            snoopSocketName = prefs[KEY_SNOOP_SOCKET_NAME] ?: AppSettings.DEFAULT_SOCKET_NAME,
             serviceEnabled = prefs[KEY_SERVICE_ENABLED] ?: false
         )
     }
@@ -40,7 +38,6 @@ class SettingsRepository(private val context: Context) {
             prefs[KEY_OUTPUT_BLE_MAC] = s.outputBleMac
             prefs[KEY_OUTPUT_BLE_NAME] = s.outputBleName
             prefs[KEY_SNOOP_FILE_PATH] = s.snoopFilePath
-            prefs[KEY_SNOOP_SOCKET_NAME] = s.snoopSocketName
             prefs[KEY_SERVICE_ENABLED] = s.serviceEnabled
         }
     }

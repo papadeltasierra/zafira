@@ -1,4 +1,4 @@
-/* * Data converted from C:/Users/paul_/git/zafira/build/esp-idf/mbedtls/x509_crt_bundle
+/* * Data converted from C:/Users/paul_/git/zafira/esp32s3/build/esp-idf/mbedtls/x509_crt_bundle
  */
 .data
 #if !defined (__APPLE__) && !defined (__linux__)

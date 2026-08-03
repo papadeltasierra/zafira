@@ -1,2 +1,2 @@
-source C:/Users/paul_/git/zafira/build/gdbinit/symbols
-source C:/Users/paul_/git/zafira/build/gdbinit/connect
+source C:/Users/paul_/git/zafira/esp32s3/build/gdbinit/symbols
+source C:/Users/paul_/git/zafira/esp32s3/build/gdbinit/connect

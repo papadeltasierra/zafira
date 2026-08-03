@@ -1,7 +1,5 @@
 package com.pioneermediabridge.parser
 
-import android.net.LocalSocket
-import android.net.LocalSocketAddress
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -12,12 +10,14 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.isActive
 import java.io.IOException
 import java.io.InputStream
+import java.net.InetSocketAddress
+import java.net.Socket
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
- * Reads the live btsnoop HCI stream from the Android local socket exposed when
- * "Enable Bluetooth HCI snoop socket" is turned on in Developer Options (Android 16 / API 36+).
+ * Reads the live btsnoop HCI stream from the Android TCP snoop logger endpoint
+ * exposed when "Enable Bluetooth HCI snoop socket" is turned on (Android 16 / API 36+).
  *
  * This is the preferred ingestion method over file-watching because:
  *  - No log file grows on the device
@@ -25,15 +25,17 @@ import java.nio.ByteOrder
  *  - No MANAGE_EXTERNAL_STORAGE permission required
  *  - Fully on-device: no ADB, no external tools, no other devices
  *
- * The socket is an abstract Unix domain socket. Default name [DEFAULT_SOCKET_NAME] is based
- * on the AOSP Bluetooth implementation; adjust in Settings if your device differs.
+ * The endpoint defaults to localhost:8872 based on observed Pixel GD Bluetooth behavior.
  */
 class BtSnoopSocketReader(
-    private val socketName: String = DEFAULT_SOCKET_NAME
+    private val host: String = DEFAULT_TCP_HOST,
+    private val port: Int = DEFAULT_TCP_PORT
 ) {
     companion object {
         private const val TAG = "BtSnoopSocketReader"
-        const val DEFAULT_SOCKET_NAME = "bthcisnoop"
+        private const val DEFAULT_TCP_HOST = "127.0.0.1"
+        private const val DEFAULT_TCP_PORT = 8872
+        private const val CONNECT_TIMEOUT_MS = 2_000
         private const val RECONNECT_DELAY_MS = 3_000L
         private val MAGIC = "btsnoop\u0000".toByteArray(Charsets.US_ASCII)
         private const val FILE_HDR_SIZE = 16
@@ -42,18 +44,17 @@ class BtSnoopSocketReader(
 
     fun records(): Flow<HciRecord> = flow {
         while (currentCoroutineContext().isActive) {
-            val socket = LocalSocket()
+            var tcpSocket: Socket? = null
             try {
-                socket.connect(
-                    LocalSocketAddress(socketName, LocalSocketAddress.Namespace.ABSTRACT)
-                )
-                Log.i(TAG, "Connected to btsnoop socket '$socketName'")
-                val stream = socket.inputStream
-                validateHeader(stream)
+                tcpSocket = Socket()
+                tcpSocket.connect(InetSocketAddress(host, port), CONNECT_TIMEOUT_MS)
+                val activeStream = tcpSocket.getInputStream()
+                Log.i(TAG, "Connected to btsnoop TCP socket $host:$port")
+                validateHeader(activeStream)
 
                 val recBuf = ByteArray(REC_HDR_SIZE)
                 while (currentCoroutineContext().isActive) {
-                    stream.readFully(recBuf)
+                    activeStream.readFully(recBuf)
                     val bb = ByteBuffer.wrap(recBuf).order(ByteOrder.BIG_ENDIAN)
                     bb.int                         // origLen
                     val inclLen = bb.int
@@ -65,15 +66,15 @@ class BtSnoopSocketReader(
                         throw IOException("Implausible record length: $inclLen")
 
                     val payload = ByteArray(inclLen)
-                    stream.readFully(payload)
+                    activeStream.readFully(payload)
                     emit(HciRecord(ts, flags, payload))
                 }
             } catch (e: IOException) {
                 if (!currentCoroutineContext().isActive) return@flow
-                Log.w(TAG, "Socket '$socketName': ${e.message} – retrying in ${RECONNECT_DELAY_MS}ms")
+                Log.w(TAG, "Socket 'tcp:$host:$port': ${e.message} – retrying in ${RECONNECT_DELAY_MS}ms")
                 delay(RECONNECT_DELAY_MS)
             } finally {
-                socket.runCatching { close() }
+                tcpSocket?.runCatching { close() }
             }
         }
     }.flowOn(Dispatchers.IO)

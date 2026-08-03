@@ -15,7 +15,6 @@ id edit_output_name
 id edit_pioneer_mac
 id edit_pioneer_name
 id edit_snoop_path
-id edit_snoop_socket
 id switch_service
 id text_ble_state
 id text_config_status
@@ -38,7 +37,6 @@ string hint_output_name
 string hint_pioneer_mac
 string hint_pioneer_name
 string hint_snoop_path
-string hint_snoop_socket
 string not_configured
 string now_playing
 string output_ble_status

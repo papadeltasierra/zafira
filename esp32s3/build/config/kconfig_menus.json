@@ -6256,7 +6256,7 @@
             }
         ],
         "depends_on": null,
-        "id": "zafira-ble-endpoint-C:-Users-paul_-git-zafira-main-Kconfig.projbuild-1",
+        "id": "zafira-ble-endpoint-C:-Users-paul_-git-zafira-esp32s3-main-Kconfig.projbuild-1",
         "title": "Zafira BLE Endpoint",
         "type": "menu"
     },

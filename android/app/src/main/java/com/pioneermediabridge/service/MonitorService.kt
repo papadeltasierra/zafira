@@ -111,12 +111,12 @@ class MonitorService : LifecycleService() {
                 }
             }
 
-            // Android 16+ exposes a local socket via "Enable Bluetooth HCI snoop socket" dev option.
+            // Android 16+ can expose a live TCP snoop logger endpoint on localhost.
             // On older versions fall back to reading the btsnoop log file.
             val rawRecords = if (android.os.Build.VERSION.SDK_INT >= 36) {
-                Log.i(TAG, "API 36: using local snoop socket '${settings.snoopSocketName}'")
-                updateNotification("Starting…", "Connecting to snoop socket")
-                BtSnoopSocketReader(settings.snoopSocketName).records()
+                Log.i(TAG, "API 36: using TCP snoop socket 127.0.0.1:8872")
+                updateNotification("Starting…", "Connecting to snoop socket (TCP)")
+                BtSnoopSocketReader().records()
             } else {
                 val snoopPath = resolveSnoopPath(settings) ?: run {
                     Log.e(TAG, "Cannot find readable btsnoop file")

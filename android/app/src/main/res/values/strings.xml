@@ -14,8 +14,7 @@
     <string name="section_pioneer">Pioneer Radio (identify by MAC and/or name)</string>
     <string name="section_output">Output BLE Device (receives media info)</string>
     <string name="section_snoop">HCI Snoop (Bluetooth packet capture)</string>
-    <string name="snoop_hint_body">Android 16: enable &#8220;Bluetooth HCI snoop socket&#8221; in Developer Options and enter the socket name below.\nOlder Android: enable &#8220;Bluetooth HCI snoop log&#8221; and enter the file path.</string>
-    <string name="hint_snoop_socket">Snoop socket name (Android 16+, default: bthcisnoop)</string>
+    <string name="snoop_hint_body">Android 16: enable &#8220;Bluetooth HCI snoop socket&#8221; in Developer Options. This app connects to localhost:8872 automatically.\nOlder Android: enable &#8220;Bluetooth HCI snoop log&#8221; and enter the file path.</string>
 
     <!-- Setup screen hints -->
     <string name="hint_pioneer_mac">Pioneer MAC address (e.g. AA:BB:CC:DD:EE:FF)</string>

@@ -39,32 +39,32 @@ endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("C:/Users/paul_/git/zafira/build/esp-idf/bt/common/cmake_install.cmake")
+  include("C:/Users/paul_/git/zafira/esp32s3/build/esp-idf/bt/common/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("C:/Users/paul_/git/zafira/build/esp-idf/bt/controller/cmake_install.cmake")
+  include("C:/Users/paul_/git/zafira/esp32s3/build/esp-idf/bt/controller/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("C:/Users/paul_/git/zafira/build/esp-idf/bt/host/bluedroid/cmake_install.cmake")
+  include("C:/Users/paul_/git/zafira/esp32s3/build/esp-idf/bt/host/bluedroid/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("C:/Users/paul_/git/zafira/build/esp-idf/bt/host/nimble/cmake_install.cmake")
+  include("C:/Users/paul_/git/zafira/esp32s3/build/esp-idf/bt/host/nimble/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("C:/Users/paul_/git/zafira/build/esp-idf/bt/esp_ble_mesh/cmake_install.cmake")
+  include("C:/Users/paul_/git/zafira/esp32s3/build/esp-idf/bt/esp_ble_mesh/cmake_install.cmake")
 endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
 if(CMAKE_INSTALL_LOCAL_ONLY)
-  file(WRITE "C:/Users/paul_/git/zafira/build/esp-idf/bt/install_local_manifest.txt"
+  file(WRITE "C:/Users/paul_/git/zafira/esp32s3/build/esp-idf/bt/install_local_manifest.txt"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")
 endif()

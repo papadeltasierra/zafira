@@ -16,7 +16,6 @@
     <string name="hint_pioneer_mac">Pioneer MAC address (e.g. AA:BB:CC:DD:EE:FF)</string>
     <string name="hint_pioneer_name">Pioneer device name (e.g. Pioneer AVIC-Z920DAB)</string>
     <string name="hint_snoop_path">Fallback file path (Android &lt; 16)</string>
-    <string name="hint_snoop_socket">Snoop socket name (Android 16+, default: bthcisnoop)</string>
     <string name="not_configured">Configuration: not set up — tap ⋮ → Settings</string>
     <string name="now_playing">Now playing / active</string>
     <string name="output_ble_status">Output BLE device</string>
@@ -28,7 +27,7 @@
     <string name="section_pioneer">Pioneer Radio (identify by MAC and/or name)</string>
     <string name="section_snoop">HCI Snoop (Bluetooth packet capture)</string>
     <string name="settings_saved">Settings saved</string>
-    <string name="snoop_hint_body">Android 16: enable “Bluetooth HCI snoop socket” in Developer Options and enter the socket name below.\nOlder Android: enable “Bluetooth HCI snoop log” and enter the file path.</string>
+    <string name="snoop_hint_body">Android 16: enable “Bluetooth HCI snoop socket” in Developer Options. This app connects to localhost:8872 automatically.\nOlder Android: enable “Bluetooth HCI snoop log” and enter the file path.</string>
     <string name="title_setup">Setup</string>
     <string name="use_default_path">Use default path</string>
     <style name="Theme.PioneerMediaBridge" parent="Theme.Material3.DayNight.NoActionBar">

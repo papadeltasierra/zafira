@@ -25,8 +25,7 @@ class SetupViewModel(app: Application) : AndroidViewModel(app) {
         pioneerName: String,
         outputBleMac: String,
         outputBleName: String,
-        snoopFilePath: String,
-        snoopSocketName: String
+        snoopFilePath: String
     ) {
         viewModelScope.launch {
             repo.save(
@@ -35,8 +34,7 @@ class SetupViewModel(app: Application) : AndroidViewModel(app) {
                     pioneerName = pioneerName.trim(),
                     outputBleMac = outputBleMac.trim(),
                     outputBleName = outputBleName.trim(),
-                    snoopFilePath = snoopFilePath.trim().ifBlank { AppSettings.DEFAULT_SNOOP_PATH },
-                    snoopSocketName = snoopSocketName.trim().ifBlank { AppSettings.DEFAULT_SOCKET_NAME }
+                    snoopFilePath = snoopFilePath.trim().ifBlank { AppSettings.DEFAULT_SNOOP_PATH }
                 )
             )
         }

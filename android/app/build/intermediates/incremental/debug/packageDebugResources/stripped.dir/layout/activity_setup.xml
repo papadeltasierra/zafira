@@ -123,22 +123,6 @@
                 android:textAppearance="?attr/textAppearanceBodySmall"
                 android:layout_marginBottom="8dp" />
 
-            <!-- Android 16+: local socket name (abstract Unix socket) -->
-            <com.google.android.material.textfield.TextInputLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="@string/hint_snoop_socket"
-                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
-
-                <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/edit_snoop_socket"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:inputType="text"
-                    android:maxLines="1" />
-
-            </com.google.android.material.textfield.TextInputLayout>
-
             <!-- Android &lt; 16 fallback: btsnoop file path -->
             <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="match_parent"

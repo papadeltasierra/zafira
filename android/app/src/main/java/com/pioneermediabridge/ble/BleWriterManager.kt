@@ -5,6 +5,7 @@ import android.bluetooth.*
 import android.bluetooth.le.*
 import android.content.Context
 import android.os.Build
+import android.os.DeadObjectException
 import android.util.Log
 import com.pioneermediabridge.model.MediaInfo
 import kotlinx.coroutines.*
@@ -157,15 +158,36 @@ class BleWriterManager(private val context: Context) {
         val (char, data) = writeQueue.poll() ?: return
         val g = gatt ?: return
         writePending = true
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            g.writeCharacteristic(char, data, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE)
-        } else {
-            @Suppress("DEPRECATION")
-            char.value = data
-            char.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
-            @Suppress("DEPRECATION")
-            g.writeCharacteristic(char)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                g.writeCharacteristic(char, data, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE)
+            } else {
+                @Suppress("DEPRECATION")
+                char.value = data
+                char.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+                @Suppress("DEPRECATION")
+                g.writeCharacteristic(char)
+            }
+        } catch (e: DeadObjectException) {
+            Log.w(TAG, "Gatt binder died during write; reconnecting", e)
+            writePending = false
+            handleGattWriteFailure()
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "Gatt write failed unexpectedly; reconnecting", e)
+            writePending = false
+            handleGattWriteFailure()
         }
+    }
+
+    private fun handleGattWriteFailure() {
+        timeSyncJob?.cancel()
+        mediaChar = null
+        timeChar = null
+        writeQueue.clear()
+        gatt?.close()
+        gatt = null
+        _state.value = BleConnectionState.DISCONNECTED
+        scheduleReconnect()
     }
 
     private fun scheduleReconnect() {

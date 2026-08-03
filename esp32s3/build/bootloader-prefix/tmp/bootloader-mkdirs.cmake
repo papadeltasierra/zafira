@@ -10,18 +10,18 @@ if(NOT EXISTS "C:/esp/v6.0.2/esp-idf/components/bootloader/subproject")
   file(MAKE_DIRECTORY "C:/esp/v6.0.2/esp-idf/components/bootloader/subproject")
 endif()
 file(MAKE_DIRECTORY
-  "C:/Users/paul_/git/zafira/build/bootloader"
-  "C:/Users/paul_/git/zafira/build/bootloader-prefix"
-  "C:/Users/paul_/git/zafira/build/bootloader-prefix/tmp"
-  "C:/Users/paul_/git/zafira/build/bootloader-prefix/src/bootloader-stamp"
-  "C:/Users/paul_/git/zafira/build/bootloader-prefix/src"
-  "C:/Users/paul_/git/zafira/build/bootloader-prefix/src/bootloader-stamp"
+  "C:/Users/paul_/git/zafira/esp32s3/build/bootloader"
+  "C:/Users/paul_/git/zafira/esp32s3/build/bootloader-prefix"
+  "C:/Users/paul_/git/zafira/esp32s3/build/bootloader-prefix/tmp"
+  "C:/Users/paul_/git/zafira/esp32s3/build/bootloader-prefix/src/bootloader-stamp"
+  "C:/Users/paul_/git/zafira/esp32s3/build/bootloader-prefix/src"
+  "C:/Users/paul_/git/zafira/esp32s3/build/bootloader-prefix/src/bootloader-stamp"
 )
 
 set(configSubDirs )
 foreach(subDir IN LISTS configSubDirs)
-    file(MAKE_DIRECTORY "C:/Users/paul_/git/zafira/build/bootloader-prefix/src/bootloader-stamp/${subDir}")
+    file(MAKE_DIRECTORY "C:/Users/paul_/git/zafira/esp32s3/build/bootloader-prefix/src/bootloader-stamp/${subDir}")
 endforeach()
 if(cfgdir)
-  file(MAKE_DIRECTORY "C:/Users/paul_/git/zafira/build/bootloader-prefix/src/bootloader-stamp${cfgdir}") # cfgdir has leading slash
+  file(MAKE_DIRECTORY "C:/Users/paul_/git/zafira/esp32s3/build/bootloader-prefix/src/bootloader-stamp${cfgdir}") # cfgdir has leading slash
 endif()

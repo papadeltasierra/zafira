@@ -3295,7 +3295,6 @@ id edit_pioneer_mac
 id edit_pioneer_name
 id edit_query
 id edit_snoop_path
-id edit_snoop_socket
 id edit_text_id
 id elastic
 id embed
@@ -3897,7 +3896,6 @@ string hint_output_name
 string hint_pioneer_mac
 string hint_pioneer_name
 string hint_snoop_path
-string hint_snoop_socket
 string icon_content_description
 string item_view_role_description
 string m3_exceed_max_badge_text_suffix

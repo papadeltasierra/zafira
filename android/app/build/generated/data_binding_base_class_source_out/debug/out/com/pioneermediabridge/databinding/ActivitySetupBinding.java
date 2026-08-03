@@ -43,17 +43,13 @@ public final class ActivitySetupBinding implements ViewBinding {
   public final TextInputEditText editSnoopPath;
 
   @NonNull
-  public final TextInputEditText editSnoopSocket;
-
-  @NonNull
   public final Toolbar toolbar;
 
   private ActivitySetupBinding(@NonNull CoordinatorLayout rootView,
       @NonNull MaterialButton buttonDefaultPath, @NonNull MaterialButton buttonSave,
       @NonNull TextInputEditText editOutputMac, @NonNull TextInputEditText editOutputName,
       @NonNull TextInputEditText editPioneerMac, @NonNull TextInputEditText editPioneerName,
-      @NonNull TextInputEditText editSnoopPath, @NonNull TextInputEditText editSnoopSocket,
-      @NonNull Toolbar toolbar) {
+      @NonNull TextInputEditText editSnoopPath, @NonNull Toolbar toolbar) {
     this.rootView = rootView;
     this.buttonDefaultPath = buttonDefaultPath;
     this.buttonSave = buttonSave;
@@ -62,7 +58,6 @@ public final class ActivitySetupBinding implements ViewBinding {
     this.editPioneerMac = editPioneerMac;
     this.editPioneerName = editPioneerName;
     this.editSnoopPath = editSnoopPath;
-    this.editSnoopSocket = editSnoopSocket;
     this.toolbar = toolbar;
   }
 
@@ -135,12 +130,6 @@ public final class ActivitySetupBinding implements ViewBinding {
         break missingId;
       }
 
-      id = R.id.edit_snoop_socket;
-      TextInputEditText editSnoopSocket = ViewBindings.findChildViewById(rootView, id);
-      if (editSnoopSocket == null) {
-        break missingId;
-      }
-
       id = R.id.toolbar;
       Toolbar toolbar = ViewBindings.findChildViewById(rootView, id);
       if (toolbar == null) {
@@ -148,8 +137,7 @@ public final class ActivitySetupBinding implements ViewBinding {
       }
 
       return new ActivitySetupBinding((CoordinatorLayout) rootView, buttonDefaultPath, buttonSave,
-          editOutputMac, editOutputName, editPioneerMac, editPioneerName, editSnoopPath,
-          editSnoopSocket, toolbar);
+          editOutputMac, editOutputName, editPioneerMac, editPioneerName, editSnoopPath, toolbar);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

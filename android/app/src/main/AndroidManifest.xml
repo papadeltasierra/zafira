@@ -33,6 +33,9 @@
     <!-- Wake lock to keep processing running -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!-- Required for TCP snoop socket client (localhost:8872) -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
 
     <application

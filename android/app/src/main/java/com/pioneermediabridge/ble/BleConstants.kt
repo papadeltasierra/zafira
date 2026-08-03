@@ -22,4 +22,5 @@ object BleConstants {
     const val RECONNECT_DELAY_MS = 5_000L
     const val SCAN_TIMEOUT_MS = 30_000L
     const val WRITE_SETTLE_MS = 50L                        // gap between writes
+    const val REQUESTED_MTU = 128
 }

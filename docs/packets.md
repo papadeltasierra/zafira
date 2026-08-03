@@ -25,13 +25,15 @@ packet
 
 ### Media value payload format
 
-First byte is the media type, followed by UTF-8 strings terminated by 0x00.
+First byte is the media type, followed by length-prefixed UTF-8 fields. Each length is a byte count and does not include a terminator.
 
-- 0x00: Radio -> stationId\0
-- 0x01: Streaming -> artist\0track\0
-- 0x02: CallOutgoing -> number\0name\0
-- 0x03: CallIncoming -> number\0name\0
+- 0x00: Radio -> stationIdLength, stationId
+- 0x01: Streaming -> artistLength, artist, trackLength, track
+- 0x02: CallOutgoing -> numberLength, number, nameLength, name
+- 0x03: CallIncoming -> numberLength, number, nameLength, name
 - 0xFF: Idle (single byte)
+
+Text fields are limited to 61 UTF-8 bytes. If a field is longer, it is truncated at a UTF-8 character boundary and ends with `...`.
 
 Example (Streaming):
 
@@ -39,8 +41,10 @@ Example (Streaming):
 packet
   title MediaInfo Value Example (Streaming)
   0-7: "Type = 0x01"
-  8-47: "artist UTF-8 + 0x00"
-  48-95: "track UTF-8 + 0x00"
+  8-15: "artist length (UTF-8 byte count)"
+  16-503: "artist UTF-8 bytes"
+  504-511: "track length (UTF-8 byte count)"
+  512-999: "track UTF-8 bytes"
 ```
 
 ## Frame 2: ATT Write Command (Time characteristic)

@@ -264,7 +264,9 @@ The output BLE device must implement the following GATT server profile:
 #### Media Info (`A1234567-1234-1234-1234-A12345678902`)
 
 - Properties: **Write Without Response** (`WRITE_TYPE_NO_RESPONSE`)
-- Max value size: 512 bytes (BLE ATT maximum)
+- Requested ATT MTU: 128 bytes; the peer may negotiate a smaller value.
+- Streaming artist and track fields are each capped at 62 UTF-8 bytes including the NUL terminator.
+- An oversized field is UTF-8 safely truncated and ends with ASCII `...`.
 - Written on every media state change (deduplicated via `distinctUntilChanged`)
 
 **Wire format:**

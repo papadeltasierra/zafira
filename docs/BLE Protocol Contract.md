@@ -54,23 +54,26 @@ Write behavior:
 - Android writes with `WRITE_TYPE_NO_RESPONSE`.
 - Writes are serialized with a queue and `WRITE_SETTLE_MS = 50` ms.
 - ESP32 accepts write and write-no-response on both characteristics.
-- ESP32 max payload length is `BLE_MSG_MAX_LEN = 256` bytes.
+- ESP32 preferred ATT MTU is 128 bytes; the Android client requests 128 and uses the negotiated result.
+- Streaming artist and track fields are each limited to 61 UTF-8 bytes plus a one-byte length.
+- Oversized text fields are UTF-8 safely truncated and end with ASCII `...`.
+- ESP32 max application payload length is `BLE_MSG_MAX_LEN = 256` bytes.
 
 ## Media Payload Wire Format
 
 Defined by `MediaInfo.toBytes()`:
 
-- `0x00`: Radio -> `stationId\0`
-- `0x01`: Streaming -> `artist\0track\0`
-- `0x02`: CallOutgoing -> `number\0name\0`
-- `0x03`: CallIncoming -> `number\0name\0`
+- `0x00`: Radio -> `stationIdLength, stationId`
+- `0x01`: Streaming -> `artistLength, artist, trackLength, track`
+- `0x02`: CallOutgoing -> `numberLength, number, nameLength, name`
+- `0x03`: CallIncoming -> `numberLength, number, nameLength, name`
 - `0xFF`: Idle (single byte)
 
 Encoding details:
 
 - Strings are UTF-8.
-- String fields are null-terminated.
-- No explicit length prefixes beyond terminators.
+- Each string has a one-byte length measured in UTF-8 bytes.
+- The length does not include a terminator; fields are not NUL-terminated on the wire.
 
 ## Time Sync Payload
 

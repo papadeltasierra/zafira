@@ -192,6 +192,83 @@ static const char *message_kind_to_str(message_kind_t kind)
     }
 }
 
+static bool read_media_field(const uint8_t *payload,
+                             uint16_t payload_len,
+                             uint16_t *offset,
+                             char *field,
+                             size_t field_size)
+{
+    if (*offset >= payload_len)
+    {
+        return false;
+    }
+
+    uint8_t field_len = payload[(*offset)++];
+    if ((uint16_t)(payload_len - *offset) < field_len || field_len >= field_size)
+    {
+        return false;
+    }
+
+    memcpy(field, &payload[*offset], field_len);
+    field[field_len] = '\0';
+    *offset += field_len;
+    return true;
+}
+
+static bool log_media_payload(const uint8_t *payload, uint16_t payload_len)
+{
+    if (payload_len == 0)
+    {
+        return false;
+    }
+
+    uint8_t type = payload[0];
+    uint16_t offset = 1;
+    char first[BLE_MSG_MAX_LEN + 1] = {0};
+    char second[BLE_MSG_MAX_LEN + 1] = {0};
+
+    switch (type)
+    {
+    case 0x00:
+        if (!read_media_field(payload, payload_len, &offset, first, sizeof(first)))
+        {
+            return false;
+        }
+        ESP_LOGI(TAG, "Media radio: station=%s", first);
+        return offset == payload_len;
+
+    case 0x01:
+        if (!read_media_field(payload, payload_len, &offset, first, sizeof(first)) ||
+            !read_media_field(payload, payload_len, &offset, second, sizeof(second)))
+        {
+            return false;
+        }
+        ESP_LOGI(TAG, "Media streaming: artist=%s track=%s", first, second);
+        return offset == payload_len;
+
+    case 0x02:
+    case 0x03:
+        if (!read_media_field(payload, payload_len, &offset, first, sizeof(first)) ||
+            !read_media_field(payload, payload_len, &offset, second, sizeof(second)))
+        {
+            return false;
+        }
+        ESP_LOGI(TAG, "Media call: type=0x%02x number=%s name=%s", type, first, second);
+        return offset == payload_len;
+
+    case 0xff:
+        if (payload_len == 1)
+        {
+            ESP_LOGI(TAG, "Media idle");
+            return true;
+        }
+        return false;
+
+    default:
+        return false;
+    }
+}
+
 static int gatt_message_write(uint16_t conn_handle,
                               uint16_t attr_handle,
                               struct ble_gatt_access_ctxt *ctxt,
@@ -220,6 +297,12 @@ static int gatt_message_write(uint16_t conn_handle,
     {
         ESP_LOGE(TAG, "Failed to flatten BLE message, rc=%d", rc);
         return BLE_ATT_ERR_UNLIKELY;
+    }
+
+    if (log_media_payload(payload, copied))
+    {
+        ESP_LOGI(TAG, "BLE media payload received: len=%u", copied);
+        return 0;
     }
 
     message_kind_t kind = classify_message(payload, copied);

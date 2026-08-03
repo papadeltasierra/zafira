@@ -29,6 +29,7 @@ class BleWriterManager(private val context: Context) {
     private var gatt: BluetoothGatt? = null
     private var mediaChar: BluetoothGattCharacteristic? = null
     private var timeChar: BluetoothGattCharacteristic? = null
+    private var mtuRequestPending = false
 
     // Serialised write queue – only one outstanding write at a time
     private val writeQueue = ArrayDeque<Pair<BluetoothGattCharacteristic, ByteArray>>()
@@ -50,7 +51,11 @@ class BleWriterManager(private val context: Context) {
                 BluetoothProfile.STATE_CONNECTED -> {
                     Log.i(TAG, "GATT connected, discovering services")
                     _state.value = BleConnectionState.DISCOVERING
-                    g.discoverServices()
+                    mtuRequestPending = g.requestMtu(BleConstants.REQUESTED_MTU)
+                    if (!mtuRequestPending) {
+                        Log.w(TAG, "MTU request failed; continuing with default MTU")
+                        g.discoverServices()
+                    }
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
                     Log.i(TAG, "GATT disconnected (status=$status)")
@@ -63,6 +68,16 @@ class BleWriterManager(private val context: Context) {
                     scheduleReconnect()
                 }
             }
+        }
+
+        override fun onMtuChanged(g: BluetoothGatt, mtu: Int, status: Int) {
+            mtuRequestPending = false
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                Log.i(TAG, "MTU negotiated: $mtu")
+            } else {
+                Log.w(TAG, "MTU negotiation failed: status=$status, mtu=$mtu")
+            }
+            g.discoverServices()
         }
 
         override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {

@@ -156,9 +156,11 @@ class BleWriterManager(private val context: Context) {
     }
 
     private fun sendTimeNow() {
-        val buf = ByteBuffer.allocate(8).order(ByteOrder.BIG_ENDIAN)
-            .putLong(System.currentTimeMillis() / 1000L).array()
-        enqueue(timeChar, buf)
+        try {
+            enqueue(timeChar, RdsClockTime.encode())
+        } catch (e: IllegalArgumentException) {
+            Log.w(TAG, "Unable to encode RDS clock time", e)
+        }
     }
 
     private fun enqueue(char: BluetoothGattCharacteristic?, data: ByteArray) {

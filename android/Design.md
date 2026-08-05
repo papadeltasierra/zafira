@@ -39,7 +39,7 @@ Android 8 was chosen as the minimum because it provides stable BLE GATT APIs, ro
 │       │  Flow<MediaInfo>                                    │
 │       ▼                                                     │
 │  BleWriterManager  ──────────────────────────► Output BLE   │
-│       │  (also sends Unix time on connect + every 30 min)  │
+│       │  (also sends RDS MJD clock time on connect + every 30 min)  │
 └─────────────────────────────────────────────────────────────┘
          │ local broadcast
          ▼
@@ -223,7 +223,7 @@ Manages the BLE GATT connection to the output device.
 **After service discovery:**
 - Looks for the custom bridge service (UUID `A1234567-…-901`).
 - Caches handles for Media Info and Time Sync characteristics.
-- Immediately sends the current Unix time (first connect action).
+- Immediately sends the current RDS MJD clock time (first connect action).
 - Schedules a `coroutines.delay`-based time sync every 30 minutes.
 
 **Write serialisation:**
@@ -289,14 +289,19 @@ Idle      (0xFF): (no further bytes)
 #### Time Sync (`A1234567-1234-1234-1234-A12345678903`)
 
 - Properties: **Write Without Response**
-- Value size: exactly 8 bytes
+- Value size: exactly 5 bytes
 - Written on first connection and then every 30 minutes
 
 **Wire format:**
 
-| Bytes | Content |
+| Bits | Content |
 |---|---|
-| 0–7 | Unix epoch seconds, big-endian `int64` |
+| 0-16 | Modified Julian Date from the UTC date |
+| 17-21 | UTC hour |
+| 22-27 | UTC minute |
+| 28 | Local UTC offset sign |
+| 29-33 | Local UTC offset in 30-minute increments |
+| 34-39 | Reserved, zero |
 
 ---
 

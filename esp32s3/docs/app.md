@@ -9,5 +9,5 @@
   - Artist and track if phone is streaming audio
   - Caller/callee if a phone calll is being made/taken
 - Sends the media information to the BLE device using a custom profile and custom attributes
-- Additionally sends the Unix time to the BLE device when it first connects and then every 30 minutes later
+- Additionally sends RDS MJD clock time to the BLE device when it first connects and then every 30 minutes later
 - The app must handle connecting to the BLE device.

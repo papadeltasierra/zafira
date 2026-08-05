@@ -79,10 +79,21 @@ Encoding details:
 
 Defined by `BleWriterManager.sendTimeNow()`:
 
-- Payload length: 8 bytes
-- Endianness: big-endian
-- Value: Unix epoch seconds (`System.currentTimeMillis() / 1000`)
-- Time base: UTC epoch (timezone-independent instant)
+- Payload length: 5 bytes (34 significant bits, with six zero reserved bits)
+- Format: RDS Clock-Time fields, packed most-significant bit first:
+
+| Byte | Bits | Field |
+|---|---|---|
+| 0-1 and byte 2 bit 7 | 17 | Modified Julian Date, calculated from the UTC calendar date since 1858-11-17 |
+| Byte 2 bits 6-2 | 5 | UTC hour |
+| Byte 2 bits 1-0 and byte 3 bits 7-4 | 6 | UTC minute |
+| Byte 3 bit 3 | 1 | Local offset sign (`0` positive, `1` negative) |
+| Byte 3 bits 2-0 and byte 4 bits 7-6 | 5 | Absolute local UTC offset in 30-minute increments |
+| Byte 4 bits 5-0 | 6 | Reserved, zero |
+
+- UTC date and time are calculated from the send instant.
+- The local offset is calculated for the Android system timezone at that same instant, including daylight-saving rules.
+- RDS only represents half-hour offsets; the Android sender does not send a value if its current timezone offset is not representable.
 
 Schedule:
 
@@ -105,11 +116,11 @@ Radio vs streaming classification:
 ## Current Limitations And Risks
 
 - `HciPacketDecoder` ACL continuation reassembly is marked as simplified and not fully implemented for very large SDL frames.
-- ESP32 currently classifies/logs received payloads; it does not yet decode media/time payload bytes into structured state.
+- ESP32 validates and logs decoded media and RDS clock-time payloads; it does not yet retain them as structured state.
 
 ## Verification Checklist
 
 - Confirm Android app can connect to ESP32 and discover bridge service.
 - Validate media payload bytes on ESP32 logs for each media type.
-- Validate 8-byte epoch value on initial connect and at 30-minute interval.
+- Validate the decoded RDS MJD, UTC hour/minute, and local offset on initial connect and at the 30-minute interval.
 - Confirm MTU negotiation does not exceed receiver payload constraints.

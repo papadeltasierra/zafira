@@ -49,7 +49,8 @@ packet
 
 ## Frame 2: ATT Write Command (Time characteristic)
 
-This is sent as an 8-byte big-endian Unix epoch seconds value.
+This is sent as a five-byte RDS Clock-Time value. It contains a 17-bit MJD for the UTC
+date, UTC hour and minute, plus the signed local UTC offset in half-hour increments.
 
 ```mermaid
 packet
@@ -57,7 +58,12 @@ packet
   0-7: "Opcode = 0x52 (Write Command)"
   8-15: "Attr Handle LSB"
   16-23: "Attr Handle MSB"
-  24-87: "Epoch seconds (uint64, big-endian)"
+  24-40: "Modified Julian Date (17 bits)"
+  41-45: "UTC hour (5 bits)"
+  46-51: "UTC minute (6 bits)"
+  52-52: "Local offset sign"
+  53-57: "Local offset in half-hours"
+  58-63: "Reserved = 0"
 ```
 
 ## When Packets Are Sent

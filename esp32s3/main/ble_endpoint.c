@@ -1,4 +1,5 @@
 #include <ctype.h>
+#include <inttypes.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -14,9 +15,11 @@
 #include "nimble/nimble_port_freertos.h"
 #include "nvs_flash.h"
 #include "store/config/ble_store_config.h"
-#include "store/util/ble_store_util.h"
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
+
+// Provided by the NimBLE config store component but not exposed in a public header.
+void ble_store_config_init(void);
 
 #define BLE_MSG_MAX_LEN 256
 
@@ -25,6 +28,7 @@ static uint8_t s_addr_type;
 static ble_uuid128_t s_service_uuid;
 static ble_uuid128_t s_media_info_char_uuid;
 static ble_uuid128_t s_time_sync_char_uuid;
+static uint16_t s_time_sync_char_handle;
 
 static void log_bonded_peer_count(void)
 {
@@ -269,6 +273,41 @@ static bool log_media_payload(const uint8_t *payload, uint16_t payload_len)
     }
 }
 
+static bool log_rds_clock_time(const uint8_t *payload, uint16_t payload_len)
+{
+    if (payload_len != 5 || (payload[4] & 0x3f) != 0)
+    {
+        return false;
+    }
+
+    uint32_t modified_julian_date = ((uint32_t)payload[0] << 9) |
+                                   ((uint32_t)payload[1] << 1) |
+                                   (payload[2] >> 7);
+    uint8_t utc_hour = (payload[2] >> 2) & 0x1f;
+    uint8_t utc_minute = ((payload[2] & 0x03) << 4) | (payload[3] >> 4);
+    bool offset_is_negative = (payload[3] & 0x08) != 0;
+    uint8_t offset_half_hours = ((payload[3] & 0x07) << 2) | (payload[4] >> 6);
+
+    if (utc_hour > 23 || utc_minute > 59)
+    {
+        return false;
+    }
+
+    int offset_minutes = offset_half_hours * 30;
+    if (offset_is_negative)
+    {
+        offset_minutes = -offset_minutes;
+    }
+
+    ESP_LOGI(TAG,
+             "RDS clock time: MJD=%" PRIu32 " UTC=%02u:%02u local-offset=%+d minutes",
+             modified_julian_date,
+             utc_hour,
+             utc_minute,
+             offset_minutes);
+    return true;
+}
+
 static int gatt_message_write(uint16_t conn_handle,
                               uint16_t attr_handle,
                               struct ble_gatt_access_ctxt *ctxt,
@@ -297,6 +336,16 @@ static int gatt_message_write(uint16_t conn_handle,
     {
         ESP_LOGE(TAG, "Failed to flatten BLE message, rc=%d", rc);
         return BLE_ATT_ERR_UNLIKELY;
+    }
+
+    if (attr_handle == s_time_sync_char_handle)
+    {
+        if (!log_rds_clock_time(payload, copied))
+        {
+            ESP_LOGW(TAG, "Invalid RDS clock-time payload: len=%u", copied);
+            return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
+        }
+        return 0;
     }
 
     if (log_media_payload(payload, copied))
@@ -335,6 +384,7 @@ static const struct ble_gatt_svc_def gatt_svcs[] = {
             {
                 .uuid = &s_time_sync_char_uuid.u,
                 .access_cb = gatt_message_write,
+                .val_handle = &s_time_sync_char_handle,
                 .flags = BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_NO_RSP,
             },
             {0},
@@ -404,12 +454,11 @@ static int gap_event(struct ble_gap_event *event, void *arg)
         break;
     }
 
-    case BLE_GAP_EVENT_PAIRING_COMPLETE:
+    case BLE_GAP_EVENT_PARING_COMPLETE:
         ESP_LOGI(TAG,
-                 "Pairing complete (handle=%d, status=%d, bonded=%d)",
+                 "Pairing complete (handle=%d, status=%d)",
                  event->pairing_complete.conn_handle,
-                 event->pairing_complete.status,
-                 event->pairing_complete.bonded);
+                 event->pairing_complete.status);
         log_bonded_peer_count();
         break;
 

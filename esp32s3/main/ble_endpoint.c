@@ -257,7 +257,7 @@ static bool log_media_payload(const uint8_t *payload, uint16_t payload_len)
         {
             return false;
         }
-        ESP_LOGI(TAG, "Media call: type=0x%02x number=%s name=%s", type, first, second);
+        ESP_LOGI(TAG, "Media call: type=0x%02x name=%s number=%s", type, first, second);
         return offset == payload_len;
 
     case 0xff:

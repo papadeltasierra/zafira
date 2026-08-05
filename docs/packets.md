@@ -29,8 +29,8 @@ First byte is the media type, followed by length-prefixed UTF-8 fields. Each len
 
 - 0x00: Radio -> stationIdLength, stationId
 - 0x01: Streaming -> artistLength, artist, trackLength, track
-- 0x02: CallOutgoing -> numberLength, number, nameLength, name
-- 0x03: CallIncoming -> numberLength, number, nameLength, name
+- 0x02: CallOutgoing -> nameLength, name, numberLength, number
+- 0x03: CallIncoming -> nameLength, name, numberLength, number
 - 0xFF: Idle (single byte)
 
 Text fields are limited to 61 UTF-8 bytes. If a field is longer, it is truncated at a UTF-8 character boundary and ends with `...`.

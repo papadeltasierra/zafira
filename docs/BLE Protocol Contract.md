@@ -65,8 +65,8 @@ Defined by `MediaInfo.toBytes()`:
 
 - `0x00`: Radio -> `stationIdLength, stationId`
 - `0x01`: Streaming -> `artistLength, artist, trackLength, track`
-- `0x02`: CallOutgoing -> `numberLength, number, nameLength, name`
-- `0x03`: CallIncoming -> `numberLength, number, nameLength, name`
+- `0x02`: CallOutgoing -> `nameLength, name, numberLength, number`
+- `0x03`: CallIncoming -> `nameLength, name, numberLength, number`
 - `0xFF`: Idle (single byte)
 
 Encoding details:

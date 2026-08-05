@@ -17,15 +17,15 @@ sealed class MediaInfo {
      * Each length is a byte count and does not include a terminator.
      * 0x00 = Radio:     stationIdLength, stationId
      * 0x01 = Streaming: artistLength, artist, trackLength, track
-     * 0x02 = CallOut:   numberLength, number, nameLength, name
-     * 0x03 = CallIn:    numberLength, number, nameLength, name
+     * 0x02 = CallOut:   nameLength, name, numberLength, number
+     * 0x03 = CallIn:    nameLength, name, numberLength, number
      * 0xFF = Idle
      */
     fun toBytes(): ByteArray = when (this) {
         is Radio -> byteArrayOf(0x00) + stationId.mediaField()
         is Streaming -> byteArrayOf(0x01) + artist.mediaField() + track.mediaField()
-        is CallOutgoing -> byteArrayOf(0x02) + number.mediaField() + name.mediaField()
-        is CallIncoming -> byteArrayOf(0x03) + number.mediaField() + name.mediaField()
+        is CallOutgoing -> byteArrayOf(0x02) + name.mediaField() + number.mediaField()
+        is CallIncoming -> byteArrayOf(0x03) + name.mediaField() + number.mediaField()
         is Idle -> byteArrayOf(0xFF.toByte())
     }
 

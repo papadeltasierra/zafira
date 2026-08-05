@@ -281,8 +281,8 @@ Type-specific payload:
 ```
 Radio     (0x00): stationId\0
 Streaming (0x01): artist\0 track\0
-CallOut   (0x02): number\0 name\0   (name may be empty: number\0\0)
-CallIn    (0x03): number\0 name\0
+CallOut   (0x02): name\0 number\0   (name may be empty: \0number\0)
+CallIn    (0x03): name\0 number\0
 Idle      (0xFF): (no further bytes)
 ```
 

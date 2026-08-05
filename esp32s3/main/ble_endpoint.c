@@ -281,8 +281,8 @@ static bool log_rds_clock_time(const uint8_t *payload, uint16_t payload_len)
     }
 
     uint32_t modified_julian_date = ((uint32_t)payload[0] << 9) |
-                                   ((uint32_t)payload[1] << 1) |
-                                   (payload[2] >> 7);
+                                    ((uint32_t)payload[1] << 1) |
+                                    (payload[2] >> 7);
     uint8_t utc_hour = (payload[2] >> 2) & 0x1f;
     uint8_t utc_minute = ((payload[2] & 0x03) << 4) | (payload[3] >> 4);
     bool offset_is_negative = (payload[3] & 0x08) != 0;

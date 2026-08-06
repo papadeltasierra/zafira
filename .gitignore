@@ -13,5 +13,5 @@ android/local.properties
 android/.idea/
 android/*.iml
 
-# AI related files
-.local
+# Local session/task notes (never commit)
+.local/

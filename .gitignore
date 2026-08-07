@@ -14,4 +14,4 @@ android/.idea/
 android/*.iml
 
 # AI related files
-SESSION_CONTEXT.md
+.local

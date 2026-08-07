@@ -1,0 +1,17 @@
+# Android build outputs
+android/.gradle/
+android/build/
+android/**/build/
+
+# ESP32 (ESP-IDF/CMake) build outputs
+esp32s3/build/
+
+# Android local-only files
+android/local.properties
+
+# IDE/editor local metadata
+android/.idea/
+android/*.iml
+
+# AI related files
+.local

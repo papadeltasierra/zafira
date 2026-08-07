@@ -1,0 +1,47 @@
+package com.pioneermediabridge.model
+
+data class AppSettings(
+    val pioneerMac: String = "",
+    val pioneerName: String = "",
+    val outputBleMac: String = "",
+    val outputBleName: String = "",
+    val snoopFilePath: String = DEFAULT_SNOOP_PATH
+) {
+    companion object {
+        const val DEFAULT_SNOOP_PATH = "/sdcard/btsnoop_hci.log"
+
+        val CANDIDATE_PATHS = listOf(
+            "/sdcard/btsnoop_hci.log",
+            "/storage/emulated/0/btsnoop_hci.log",
+            "/data/misc/bluetooth/logs/btsnoop_hci.log"
+        )
+    }
+
+    val isConfigured: Boolean
+        get() = (pioneerMac.isNotBlank() || pioneerName.isNotBlank()) &&
+                (outputBleMac.isNotBlank() || outputBleName.isNotBlank())
+
+    /** Pioneer BD_ADDR as 6-byte little-endian array for HCI event matching. */
+    val pioneerMacBytes: ByteArray?
+        get() {
+            if (pioneerMac.isBlank()) return null
+            return pioneerMac.toBdAddrLittleEndianBytes()
+        }
+
+    /** Output BLE BD_ADDR as 6-byte little-endian array for excluding self-generated traffic. */
+    val outputBleMacBytes: ByteArray?
+        get() {
+            if (outputBleMac.isBlank()) return null
+            return outputBleMac.toBdAddrLittleEndianBytes()
+        }
+
+    private fun String.toBdAddrLittleEndianBytes(): ByteArray? {
+        val parts = trim().split(":")
+        if (parts.size != 6) return null
+        return try {
+            parts.map { it.toInt(16).toByte() }.reversed().toByteArray()
+        } catch (_: NumberFormatException) {
+            null
+        }
+    }
+}

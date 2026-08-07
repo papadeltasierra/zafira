@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="seed">#1565C0</color>
+    <color name="md_theme_primary">#1565C0</color>
+    <color name="md_theme_on_primary">#FFFFFF</color>
+    <color name="md_theme_surface">#FFFBFE</color>
+    <!-- Matches the black surround of the launcher artwork so mask corners blend. -->
+    <color name="ic_launcher_background">#000000</color>
+</resources>

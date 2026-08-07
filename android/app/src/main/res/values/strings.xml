@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Zafira</string>
+    <string name="title_setup">Setup</string>
+
+    <!-- Main screen -->
+    <string name="configured">Configuration: OK</string>
+    <string name="not_configured">Configuration: not set up — tap ⋮ → Settings</string>
+    <string name="output_ble_status">Output BLE device</string>
+    <string name="now_playing">Now playing / active</string>
+
+    <!-- Setup screen sections -->
+    <string name="section_pioneer">Pioneer Radio (identify by MAC and/or name)</string>
+    <string name="section_output">Output BLE Device (receives media info)</string>
+    <string name="section_snoop">HCI Snoop (Bluetooth packet capture)</string>
+    <string name="snoop_hint_body">Android 16: enable &#8220;Bluetooth HCI snoop socket&#8221; in Developer Options. This app connects to localhost:8872 automatically.\nOlder Android: enable &#8220;Bluetooth HCI snoop log&#8221; and enter the file path.</string>
+
+    <!-- Setup screen hints -->
+    <string name="hint_pioneer_mac">Pioneer MAC address (e.g. AA:BB:CC:DD:EE:FF)</string>
+    <string name="hint_pioneer_name">Pioneer device name (e.g. Pioneer AVIC-Z920DAB)</string>
+    <string name="hint_output_mac">Output device MAC address</string>
+    <string name="hint_output_name">Output device BLE name</string>
+    <string name="hint_snoop_path">Fallback file path (Android &lt; 16)</string>
+    <string name="use_default_path">Use default path</string>
+    <string name="perm_all_files_title">File access required</string>
+    <string name="perm_all_files_msg">Grant \'Manage all files\' permission so the app can read the btsnoop HCI log.</string>
+    <string name="perm_all_files_button">Open Settings</string>
+    <string name="save_settings">Save</string>
+    <string name="settings_saved">Settings saved</string>
+    <string name="bluetooth_permission_required">Bluetooth permission is required to list known devices.</string>
+
+    <!-- Validation errors -->
+    <string name="error_pioneer_required">Enter MAC address or device name for Pioneer radio</string>
+    <string name="error_output_required">Enter MAC address or device name for output device</string>
+    <string name="error_invalid_mac">Invalid MAC address format (expected XX:XX:XX:XX:XX:XX)</string>
+
+    <!-- Menu -->
+    <string name="action_settings">Settings</string>
+</resources>

@@ -25,12 +25,23 @@ data class AppSettings(
     val pioneerMacBytes: ByteArray?
         get() {
             if (pioneerMac.isBlank()) return null
-            val parts = pioneerMac.trim().split(":")
-            if (parts.size != 6) return null
-            return try {
-                parts.map { it.toInt(16).toByte() }.reversed().toByteArray()
-            } catch (_: NumberFormatException) {
-                null
-            }
+            return pioneerMac.toBdAddrLittleEndianBytes()
         }
+
+    /** Output BLE BD_ADDR as 6-byte little-endian array for excluding self-generated traffic. */
+    val outputBleMacBytes: ByteArray?
+        get() {
+            if (outputBleMac.isBlank()) return null
+            return outputBleMac.toBdAddrLittleEndianBytes()
+        }
+
+    private fun String.toBdAddrLittleEndianBytes(): ByteArray? {
+        val parts = trim().split(":")
+        if (parts.size != 6) return null
+        return try {
+            parts.map { it.toInt(16).toByte() }.reversed().toByteArray()
+        } catch (_: NumberFormatException) {
+            null
+        }
+    }
 }

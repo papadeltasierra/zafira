@@ -29,7 +29,10 @@ data class AttPayload(
  *   HciRecord → HCI event parsing (connection tracking)
  *             → HCI ACL fragment reassembly → L2CAP PDU → ATT PDU
  */
-class HciPacketDecoder(private val pioneerMacBytes: ByteArray?) {
+class HciPacketDecoder(
+    private val pioneerMacBytes: ByteArray?,
+    private val excludedMacBytes: ByteArray? = null
+) {
 
     companion object {
         // H4 packet type indicators
@@ -78,6 +81,9 @@ class HciPacketDecoder(private val pioneerMacBytes: ByteArray?) {
             Log.w(TAG, "No Pioneer MAC configured – will track all LE connections (may emit non-Pioneer traffic)")
         } else {
             Log.i(TAG, "Looking for Pioneer MAC: ${pioneerMacBytes.toMacString()}")
+        }
+        excludedMacBytes?.let {
+            Log.i(TAG, "Excluding output BLE MAC from tracking: ${it.toMacString()}")
         }
         records.collect { rec ->
             if (rec.data.isEmpty()) return@collect
@@ -140,6 +146,11 @@ class HciPacketDecoder(private val pioneerMacBytes: ByteArray?) {
         val handle = (data[offset + 1].toInt() and 0xFF) or ((data[offset + 2].toInt() and 0x0F) shl 8)
         val addr = data.copyOfRange(offset + 5, offset + 11)
         val addrStr = addr.toMacString()
+
+        if (excludedMacBytes != null && addr.contentEquals(excludedMacBytes)) {
+            Log.d(TAG, "LE connection addr=$addrStr handle=0x${handle.toString(16).padStart(4,'0')} – excluded output BLE device")
+            return
+        }
 
         if (pioneerMacBytes == null) {
             trackedHandles.add(handle)

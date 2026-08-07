@@ -137,13 +137,10 @@ class MonitorService : LifecycleService() {
                 BtSnoopReader(snoopPath).records()
             }
 
-            val hciDecoder = HciPacketDecoder(settings.pioneerMacBytes)
-            val sdlAssembler = SdlFrameAssembler()
-            val mediaParser = PioneerMediaParser()
-
-            val attPayloads = hciDecoder.decode(rawRecords)
-            val sdlFrames = sdlAssembler.assemble(attPayloads)
-            val mediaFlow = mediaParser.parse(sdlFrames)
+            val mediaFlow = ClassicSmartSyncParser(
+                pioneerMacBytes = settings.pioneerMacBytes,
+                excludedMacBytes = settings.outputBleMacBytes
+            ).parse(rawRecords)
 
             mediaFlow
                 .distinctUntilChanged()

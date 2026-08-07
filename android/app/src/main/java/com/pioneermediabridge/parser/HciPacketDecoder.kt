@@ -65,6 +65,7 @@ class HciPacketDecoder(private val pioneerMacBytes: ByteArray?) {
 
     // Active pioneer connection handle (-1 = none)
     private var pioneerHandle: Int = -1
+    private val trackedHandles = HashSet<Int>()
     private var hciRecordCount = 0L
     private var attPayloadCount = 0L
 
@@ -110,9 +111,10 @@ class HciPacketDecoder(private val pioneerMacBytes: ByteArray?) {
         if (handle == pioneerHandle) {
             Log.i(TAG, "Pioneer disconnected (handle=0x${handle.toString(16).padStart(4,'0')})")
             pioneerHandle = -1
-            aclBuffers.remove(handle)
-            aclExpected.remove(handle)
         }
+        trackedHandles.remove(handle)
+        aclBuffers.remove(handle)
+        aclExpected.remove(handle)
     }
 
     private fun handleLeMeta(data: ByteArray) {
@@ -139,8 +141,12 @@ class HciPacketDecoder(private val pioneerMacBytes: ByteArray?) {
         val addr = data.copyOfRange(offset + 5, offset + 11)
         val addrStr = addr.toMacString()
 
-        if (pioneerMacBytes != null && addr.contentEquals(pioneerMacBytes)) {
+        if (pioneerMacBytes == null) {
+            trackedHandles.add(handle)
+            Log.i(TAG, "Tracking LE connection without Pioneer MAC: addr=$addrStr handle=0x${handle.toString(16).padStart(4,'0')}")
+        } else if (addr.contentEquals(pioneerMacBytes)) {
             pioneerHandle = handle
+            trackedHandles.add(handle)
             Log.i(TAG, "Pioneer connection found: addr=$addrStr handle=0x${handle.toString(16).padStart(4,'0')}")
         } else {
             Log.d(TAG, "LE connection addr=$addrStr handle=0x${handle.toString(16).padStart(4,'0')} – not Pioneer, ignoring")
@@ -158,7 +164,7 @@ class HciPacketDecoder(private val pioneerMacBytes: ByteArray?) {
         val pb = (handleAndFlags shr 12) and 0x03
         val totalLen = bb.short.toInt() and 0xFFFF
 
-        if (connHandle != pioneerHandle) return null
+        if (!trackedHandles.contains(connHandle)) return null
 
         val payload = data.copyOfRange(5, data.size) // everything after 4-byte ACL header
 

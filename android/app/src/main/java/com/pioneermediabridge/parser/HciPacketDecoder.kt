@@ -164,9 +164,8 @@ class HciPacketDecoder(private val pioneerMacBytes: ByteArray?) {
         val pb = (handleAndFlags shr 12) and 0x03
         val totalLen = bb.short.toInt() and 0xFFFF
 
-        if (!trackedHandles.contains(connHandle)) return null
-
         val payload = data.copyOfRange(5, data.size) // everything after 4-byte ACL header
+        val isTracked = trackedHandles.contains(connHandle)
 
         return when (pb) {
             PB_FIRST, PB_FIRST_NF -> {
@@ -177,6 +176,12 @@ class HciPacketDecoder(private val pioneerMacBytes: ByteArray?) {
                 if (cid != L2CAP_ATT) return null
 
                 val l2capBody = payload.copyOfRange(4, payload.size)
+                if (!isTracked) {
+                    if (!looksLikeSdlAtt(l2capBody)) return null
+                    trackedHandles.add(connHandle)
+                    Log.i(TAG, "Tracking LE connection from SDL-looking ATT payload: handle=0x${connHandle.toString(16).padStart(4,'0')}")
+                }
+
                 if (l2capBody.size >= l2capLen) {
                     // Complete in this fragment
                     parseAtt(l2capBody.copyOfRange(0, l2capLen), fromController)
@@ -191,6 +196,7 @@ class HciPacketDecoder(private val pioneerMacBytes: ByteArray?) {
                 }
             }
             PB_CONT -> {
+                if (!isTracked) return null
                 val buf = aclBuffers[connHandle] ?: return null
                 val expected = aclExpected[connHandle] ?: return null
                 val filled = buf.indexOfFirst { it == 0.toByte() }.let {
@@ -206,6 +212,22 @@ class HciPacketDecoder(private val pioneerMacBytes: ByteArray?) {
             }
             else -> null
         }
+    }
+
+    private fun looksLikeSdlAtt(data: ByteArray): Boolean {
+        if (data.size < 3 + 12) return false
+        val opcode = data[0].toInt() and 0xFF
+        if (opcode != ATT_WRITE_CMD && opcode != ATT_WRITE_REQ &&
+            opcode != ATT_NOTIFY && opcode != ATT_INDICATE) return false
+
+        val valueOffset = 3
+        val firstValueByte = data[valueOffset].toInt() and 0xFF
+        val version = (firstValueByte shr 4) and 0x0F
+        if (version < 1 || version > 5) return false
+
+        val serviceType = data[valueOffset + 1].toInt() and 0xFF
+        return serviceType == 0x00 || serviceType == 0x07 ||
+            serviceType == 0x0A || serviceType == 0x0B || serviceType == 0x0F
     }
 
     private fun parseAtt(data: ByteArray, fromController: Boolean): AttPayload? {

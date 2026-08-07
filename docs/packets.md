@@ -29,11 +29,13 @@ First byte is the media type, followed by length-prefixed UTF-8 fields. Each len
 
 - 0x00: Radio -> stationIdLength, stationId
 - 0x01: Streaming -> artistLength, artist, trackLength, track
-- 0x02: CallOutgoing -> nameLength, name, numberLength, number
-- 0x03: CallIncoming -> nameLength, name, numberLength, number
+- 0x02: CallOutgoing -> partyLength, party
+- 0x03: CallIncoming -> partyLength, party
 - 0xFF: Idle (single byte)
 
 Text fields are limited to 61 UTF-8 bytes. If a field is longer, it is truncated at a UTF-8 character boundary and ends with `...`.
+
+For call payloads, `party` is the caller/callee name when available; otherwise it is the phone number.
 
 Example (Streaming):
 
@@ -84,6 +86,13 @@ packet
 - A 50 ms settle gap is applied between writes.
 - Write type is no-response.
 
+### ESP32 receive handling
+
+- The GATT callback copies each complete characteristic value into a FreeRTOS queue without waiting.
+- The Core 1 display task parses and consumes queued payloads.
+- The queue depth is configured by `CONFIG_ZAFIRA_DISPLAY_QUEUE_DEPTH` and defaults to `3`.
+- When that queue is full, the ESP32 rejects the incoming write rather than delaying BLE processing.
+
 ## Source of Information
 
 The diagrams and timing rules above are derived from these implementation points:
@@ -111,5 +120,5 @@ The diagrams and timing rules above are derived from these implementation points
 
 - ESP32 receive path and accepted write ops:
   - esp32s3/main/ble_endpoint.c
-  - gatt_message_write(...)
+  - gatt_message_write(...), display_task(...)
   - BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_NO_RSP for media/time characteristics

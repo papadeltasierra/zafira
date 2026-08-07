@@ -27,6 +27,7 @@
     <string name="perm_all_files_button">Open Settings</string>
     <string name="save_settings">Save</string>
     <string name="settings_saved">Settings saved</string>
+    <string name="bluetooth_permission_required">Bluetooth permission is required to list known devices.</string>
 
     <!-- Validation errors -->
     <string name="error_pioneer_required">Enter MAC address or device name for Pioneer radio</string>

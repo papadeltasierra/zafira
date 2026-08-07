@@ -37,12 +37,14 @@
                 android:layout_marginBottom="8dp" />
 
             <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/layout_pioneer_mac"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:hint="@string/hint_pioneer_mac"
+                app:endIconMode="dropdown_menu"
                 style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
 
-                <com.google.android.material.textfield.TextInputEditText
+                <AutoCompleteTextView
                     android:id="@+id/edit_pioneer_mac"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -77,12 +79,14 @@
                 android:layout_marginBottom="8dp" />
 
             <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/layout_output_mac"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:hint="@string/hint_output_mac"
+                app:endIconMode="dropdown_menu"
                 style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
 
-                <com.google.android.material.textfield.TextInputEditText
+                <AutoCompleteTextView
                     android:id="@+id/edit_output_mac"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"

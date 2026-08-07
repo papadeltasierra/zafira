@@ -5,8 +5,7 @@ data class AppSettings(
     val pioneerName: String = "",
     val outputBleMac: String = "",
     val outputBleName: String = "",
-    val snoopFilePath: String = DEFAULT_SNOOP_PATH,
-    val serviceEnabled: Boolean = false
+    val snoopFilePath: String = DEFAULT_SNOOP_PATH
 ) {
     companion object {
         const val DEFAULT_SNOOP_PATH = "/sdcard/btsnoop_hci.log"

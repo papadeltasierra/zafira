@@ -30,10 +30,11 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private val viewModel: MainViewModel by viewModels()
+    private var allFilesPromptShown = false
 
     private val allFilesLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
-    ) { /* user returns from settings; recheck on next toggle */ }
+    ) { startBridgeIfAllowed() }
 
     private val statusReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -47,9 +48,7 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.RequestMultiplePermissions()
     ) { results ->
         if (results.values.all { it }) {
-            toggleService(true)
-        } else {
-            binding.switchService.isChecked = false
+            startBridgeIfAllowed()
         }
     }
 
@@ -59,24 +58,9 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
         setSupportActionBar(binding.toolbar)
 
-        binding.switchService.setOnCheckedChangeListener { _, checked ->
-            if (checked) {
-                if (!hasAllFilesPermission()) {
-                    binding.switchService.isChecked = false
-                    promptAllFilesPermission()
-                    return@setOnCheckedChangeListener
-                }
-                if (hasRequiredPermissions()) toggleService(true)
-                else requestPermissions()
-            } else {
-                toggleService(false)
-            }
-        }
-
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.uiState.collect { state ->
-                    binding.switchService.isChecked = state.serviceRunning
                     binding.textBleState.text = state.bleState
                     binding.textMediaInfo.text = state.currentMedia
                     binding.textConfigStatus.text = if (state.isConfigured)
@@ -93,6 +77,7 @@ class MainActivity : AppCompatActivity() {
             IntentFilter(MonitorService.BROADCAST_STATUS),
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
+        startBridgeIfAllowed()
     }
 
     override fun onStop() {
@@ -113,17 +98,15 @@ class MainActivity : AppCompatActivity() {
         return super.onOptionsItemSelected(item)
     }
 
-    private fun toggleService(enable: Boolean) {
-        viewModel.setServiceEnabled(enable)
-        if (enable) MonitorService.start(this) else MonitorService.stop(this)
-    }
-
     private fun hasAllFilesPermission(): Boolean {
+        if (Build.VERSION.SDK_INT >= 36) return true
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return true
         return Environment.isExternalStorageManager()
     }
 
     private fun promptAllFilesPermission() {
+        if (allFilesPromptShown) return
+        allFilesPromptShown = true
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.perm_all_files_title)
             .setMessage(R.string.perm_all_files_msg)
@@ -134,6 +117,21 @@ class MainActivity : AppCompatActivity() {
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
+    }
+
+    private fun startBridgeIfAllowed() {
+        lifecycleScope.launch {
+            if (!viewModel.isConfigured()) return@launch
+            if (!hasAllFilesPermission()) {
+                promptAllFilesPermission()
+                return@launch
+            }
+            if (hasRequiredPermissions()) {
+                MonitorService.start(this@MainActivity)
+            } else {
+                requestPermissions()
+            }
+        }
     }
 
     private fun hasRequiredPermissions(): Boolean {

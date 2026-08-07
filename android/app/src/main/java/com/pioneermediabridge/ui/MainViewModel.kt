@@ -6,10 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.pioneermediabridge.ble.BleConnectionState
 import com.pioneermediabridge.model.SettingsRepository
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.launch
 
 data class MainUiState(
-    val serviceRunning: Boolean = false,
     val bleState: String = BleConnectionState.DISCONNECTED.name,
     val currentMedia: String = "Idle",
     val isConfigured: Boolean = false
@@ -28,7 +26,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _currentMedia
     ) { settings, bleState, media ->
         MainUiState(
-            serviceRunning = settings.serviceEnabled,
             bleState = bleState,
             currentMedia = media,
             isConfigured = settings.isConfigured
@@ -40,7 +37,5 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _bleState.value = bleState
     }
 
-    fun setServiceEnabled(enabled: Boolean) {
-        viewModelScope.launch { repo.setServiceEnabled(enabled) }
-    }
+    suspend fun isConfigured(): Boolean = repo.settings.first().isConfigured
 }

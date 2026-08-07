@@ -17,7 +17,6 @@ class SettingsRepository(private val context: Context) {
         val KEY_OUTPUT_BLE_MAC = stringPreferencesKey("output_ble_mac")
         val KEY_OUTPUT_BLE_NAME = stringPreferencesKey("output_ble_name")
         val KEY_SNOOP_FILE_PATH = stringPreferencesKey("snoop_file_path")
-        val KEY_SERVICE_ENABLED = booleanPreferencesKey("service_enabled")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { prefs ->
@@ -26,8 +25,7 @@ class SettingsRepository(private val context: Context) {
             pioneerName = prefs[KEY_PIONEER_NAME] ?: "",
             outputBleMac = prefs[KEY_OUTPUT_BLE_MAC] ?: "",
             outputBleName = prefs[KEY_OUTPUT_BLE_NAME] ?: "",
-            snoopFilePath = prefs[KEY_SNOOP_FILE_PATH] ?: AppSettings.DEFAULT_SNOOP_PATH,
-            serviceEnabled = prefs[KEY_SERVICE_ENABLED] ?: false
+            snoopFilePath = prefs[KEY_SNOOP_FILE_PATH] ?: AppSettings.DEFAULT_SNOOP_PATH
         )
     }
 
@@ -38,11 +36,6 @@ class SettingsRepository(private val context: Context) {
             prefs[KEY_OUTPUT_BLE_MAC] = s.outputBleMac
             prefs[KEY_OUTPUT_BLE_NAME] = s.outputBleName
             prefs[KEY_SNOOP_FILE_PATH] = s.snoopFilePath
-            prefs[KEY_SERVICE_ENABLED] = s.serviceEnabled
         }
-    }
-
-    suspend fun setServiceEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[KEY_SERVICE_ENABLED] = enabled }
     }
 }

@@ -4,7 +4,6 @@
     <string name="title_setup">Setup</string>
 
     <!-- Main screen -->
-    <string name="enable_service">Enable monitoring service</string>
     <string name="configured">Configuration: OK</string>
     <string name="not_configured">Configuration: not set up — tap ⋮ → Settings</string>
     <string name="output_ble_status">Output BLE device</string>

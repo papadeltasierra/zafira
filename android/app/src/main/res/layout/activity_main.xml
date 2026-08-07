@@ -23,27 +23,16 @@
         android:padding="16dp"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
-        <!-- Service toggle -->
-        <com.google.android.material.switchmaterial.SwitchMaterial
-            android:id="@+id/switch_service"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:text="@string/enable_service"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
-
         <!-- Config status -->
         <TextView
             android:id="@+id/text_config_status"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
             android:text="@string/not_configured"
             android:textAppearance="?attr/textAppearanceBodyMedium"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/switch_service" />
+            app:layout_constraintTop_toTopOf="parent" />
 
         <!-- BLE state card -->
         <com.google.android.material.card.MaterialCardView

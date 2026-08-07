@@ -44,9 +44,7 @@ class MonitorService : LifecycleService() {
         }
 
         fun stop(context: Context) {
-            context.startService(
-                Intent(context, MonitorService::class.java).apply { action = ACTION_STOP }
-            )
+            context.stopService(Intent(context, MonitorService::class.java))
         }
     }
 

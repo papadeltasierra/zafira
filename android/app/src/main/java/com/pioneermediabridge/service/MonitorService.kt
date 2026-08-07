@@ -51,6 +51,7 @@ class MonitorService : LifecycleService() {
     private val bleWriter = BleWriterManager(this)
     private var monitorJob: Job? = null
     private var lastMediaInfo: MediaInfo = MediaInfo.Idle
+    private var currentBleState: BleConnectionState = BleConnectionState.DISCONNECTED
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -63,7 +64,15 @@ class MonitorService : LifecycleService() {
         super.onStartCommand(intent, flags, startId)
         when (intent?.action) {
             ACTION_STOP -> { stopSelf(); return START_NOT_STICKY }
-            else -> startMonitoring()
+            else -> {
+                if (monitorJob?.isActive == true) {
+                    // MainActivity may issue ACTION_START whenever it enters foreground.
+                    // Reuse the current monitor session instead of tearing down BLE.
+                    broadcastStatus(lastMediaInfo, currentBleState)
+                    return START_STICKY
+                }
+                startMonitoring()
+            }
         }
         return START_STICKY
     }
@@ -71,6 +80,8 @@ class MonitorService : LifecycleService() {
     override fun onDestroy() {
         monitorJob?.cancel()
         bleWriter.stop()
+        currentBleState = BleConnectionState.DISCONNECTED
+        broadcastStatus(lastMediaInfo, currentBleState)
         super.onDestroy()
     }
 
@@ -96,6 +107,7 @@ class MonitorService : LifecycleService() {
             // Observe BLE state changes for notification updates
             launch {
                 bleWriter.connectionState.collect { state ->
+                    currentBleState = state
                     val label = when (state) {
                         BleConnectionState.DISCONNECTED -> "Output: disconnected"
                         BleConnectionState.SCANNING -> "Output: scanning…"

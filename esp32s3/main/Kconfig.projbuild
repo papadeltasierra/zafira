@@ -21,4 +21,12 @@ config ZAFIRA_BLE_MTU
         Preferred ATT MTU negotiated on each connection.
         The peer may agree on a smaller value.
 
+config ZAFIRA_DISPLAY_QUEUE_DEPTH
+    int "Display message queue depth"
+    default 3
+    range 1 32
+    help
+        Number of received BLE payloads buffered for the display task.
+        New payloads are rejected when the queue is full so BLE processing remains nonblocking.
+
 endmenu

@@ -8,6 +8,7 @@
 #include "esp_err.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
 #include "freertos/task.h"
 #include "host/ble_hs.h"
 #include "host/ble_uuid.h"
@@ -22,6 +23,8 @@
 void ble_store_config_init(void);
 
 #define BLE_MSG_MAX_LEN 256
+#define DISPLAY_TASK_CORE 1
+#define DISPLAY_TASK_STACK_SIZE 4096
 
 static const char *TAG = "zafira_ble";
 static uint8_t s_addr_type;
@@ -29,6 +32,14 @@ static ble_uuid128_t s_service_uuid;
 static ble_uuid128_t s_media_info_char_uuid;
 static ble_uuid128_t s_time_sync_char_uuid;
 static uint16_t s_time_sync_char_handle;
+static QueueHandle_t s_display_queue;
+
+typedef struct
+{
+    uint16_t attr_handle;
+    uint16_t payload_len;
+    uint8_t payload[BLE_MSG_MAX_LEN];
+} display_message_t;
 
 static void log_bonded_peer_count(void)
 {
@@ -307,13 +318,57 @@ static bool log_rds_clock_time(const uint8_t *payload, uint16_t payload_len)
     return true;
 }
 
+static void process_display_message(const display_message_t *message)
+{
+    if (message->attr_handle == s_time_sync_char_handle)
+    {
+        if (!log_rds_clock_time(message->payload, message->payload_len))
+        {
+            ESP_LOGW(TAG, "Invalid RDS clock-time payload: len=%u", message->payload_len);
+        }
+        return;
+    }
+
+    if (log_media_payload(message->payload, message->payload_len))
+    {
+        return;
+    }
+
+    message_kind_t kind = classify_message(message->payload, message->payload_len);
+    ESP_LOGI(TAG, "BLE message received: kind=%s len=%u", message_kind_to_str(kind), message->payload_len);
+
+    if (kind == MSG_KIND_ASCII_TEXT || kind == MSG_KIND_JSON_TEXT || kind == MSG_KIND_EMPTY)
+    {
+        char text[BLE_MSG_MAX_LEN + 1] = {0};
+        memcpy(text, message->payload, message->payload_len);
+        ESP_LOGI(TAG, "BLE message text: %s", text);
+    }
+    else
+    {
+        ESP_LOG_BUFFER_HEX_LEVEL(TAG, message->payload, message->payload_len, ESP_LOG_INFO);
+    }
+}
+
+static void display_task(void *param)
+{
+    (void)param;
+    display_message_t message;
+
+    for (;;)
+    {
+        if (xQueueReceive(s_display_queue, &message, portMAX_DELAY) == pdPASS)
+        {
+            process_display_message(&message);
+        }
+    }
+}
+
 static int gatt_message_write(uint16_t conn_handle,
                               uint16_t attr_handle,
                               struct ble_gatt_access_ctxt *ctxt,
                               void *arg)
 {
     (void)conn_handle;
-    (void)attr_handle;
     (void)arg;
 
     if (ctxt->op != BLE_GATT_ACCESS_OP_WRITE_CHR)
@@ -324,46 +379,23 @@ static int gatt_message_write(uint16_t conn_handle,
     uint16_t msg_len = OS_MBUF_PKTLEN(ctxt->om);
     if (msg_len > BLE_MSG_MAX_LEN)
     {
-        ESP_LOGW(TAG, "Message too long (%u > %u)", msg_len, BLE_MSG_MAX_LEN);
         return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
     }
 
-    uint8_t payload[BLE_MSG_MAX_LEN] = {0};
+    display_message_t message = {
+        .attr_handle = attr_handle,
+        .payload_len = msg_len,
+    };
     uint16_t copied = 0;
-    int rc = ble_hs_mbuf_to_flat(ctxt->om, payload, sizeof(payload), &copied);
-    if (rc != 0)
+    int rc = ble_hs_mbuf_to_flat(ctxt->om, message.payload, sizeof(message.payload), &copied);
+    if (rc != 0 || copied != msg_len)
     {
-        ESP_LOGE(TAG, "Failed to flatten BLE message, rc=%d", rc);
         return BLE_ATT_ERR_UNLIKELY;
     }
 
-    if (attr_handle == s_time_sync_char_handle)
+    if (xQueueSend(s_display_queue, &message, 0) != pdPASS)
     {
-        if (!log_rds_clock_time(payload, copied))
-        {
-            ESP_LOGW(TAG, "Invalid RDS clock-time payload: len=%u", copied);
-            return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
-        }
-        return 0;
-    }
-
-    if (log_media_payload(payload, copied))
-    {
-        return 0;
-    }
-
-    message_kind_t kind = classify_message(payload, copied);
-    ESP_LOGI(TAG, "BLE message received: kind=%s len=%u", message_kind_to_str(kind), copied);
-
-    if (kind == MSG_KIND_ASCII_TEXT || kind == MSG_KIND_JSON_TEXT || kind == MSG_KIND_EMPTY)
-    {
-        char text[BLE_MSG_MAX_LEN + 1] = {0};
-        memcpy(text, payload, copied);
-        ESP_LOGI(TAG, "BLE message text: %s", text);
-    }
-    else
-    {
-        ESP_LOG_BUFFER_HEX_LEVEL(TAG, payload, copied, ESP_LOG_INFO);
+        return BLE_ATT_ERR_INSUFFICIENT_RES;
     }
 
     return 0;
@@ -563,6 +595,27 @@ void app_main(void)
         err = nvs_flash_init();
     }
     ESP_ERROR_CHECK(err);
+
+    s_display_queue = xQueueCreate(CONFIG_ZAFIRA_DISPLAY_QUEUE_DEPTH, sizeof(display_message_t));
+    if (s_display_queue == NULL)
+    {
+        ESP_LOGE(TAG, "Failed to create display queue");
+        return;
+    }
+
+    if (xTaskCreatePinnedToCore(display_task,
+                                "display_task",
+                                DISPLAY_TASK_STACK_SIZE,
+                                NULL,
+                                tskIDLE_PRIORITY + 1,
+                                NULL,
+                                DISPLAY_TASK_CORE) != pdPASS)
+    {
+        ESP_LOGE(TAG, "Failed to create display task");
+        vQueueDelete(s_display_queue);
+        s_display_queue = NULL;
+        return;
+    }
 
     uint8_t service_uuid_le[16] = {0};
     err = parse_uuid128_le(CONFIG_ZAFIRA_BLE_PROFILE_UUID, service_uuid_le);

@@ -67,6 +67,8 @@ Defined by `MediaInfo.toBytes()`:
 - `0x01`: Streaming -> `artistLength, artist, trackLength, track`
 - `0x02`: CallOutgoing -> `nameLength, name, numberLength, number`
 - `0x03`: CallIncoming -> `nameLength, name, numberLength, number`
+- `0x04`: Radio details -> `stationLength, station, textLength, text, programmeTypeLength, programmeType, signalLength, signal`
+- `0x05`: Streaming details -> `artistLength, artist, trackLength, track, albumLength, album, genreLength, genre`
 - `0xFF`: Idle (single byte)
 
 Encoding details:
@@ -102,21 +104,17 @@ Schedule:
 
 ## Parser Semantics (Android)
 
-Media extraction is based on SDL RPC frames:
+Media extraction is based on Smart Sync frames carried over classic Bluetooth RFCOMM:
 
-- `Show` (`functionId 0x0D`) -> radio/streaming classification
-- `DialNumber` (`0x28`) -> outgoing call
-- `OnHMIStatus` (`0x8000`) -> context tracking only
+- `0x31` radio details: subtype `0x00` station or frequency, `0x01` radio text, `0x02` programme type, `0x03` signal indicator
+- `0x32` streaming details: subtype `0x00` track, `0x01` artist, `0x02` album, `0x03` genre
 
-Radio vs streaming classification:
-
-- Prefer `metadataTags` in JSON (`mediaStation`, `mediaArtist`, `mediaTitle`).
-- Fall back to station regex heuristics and field combinations.
+The Android bridge retains the most recent value for each field and writes the complete structured record after each update.
 
 ## Current Limitations And Risks
 
 - `HciPacketDecoder` ACL continuation reassembly is marked as simplified and not fully implemented for very large SDL frames.
-- ESP32 validates and logs decoded media and RDS clock-time payloads; it does not yet retain them as structured state.
+- Phone caller/callee fields have not yet been identified in Smart Sync traffic. Capture an incoming and an outgoing call while the app runs to establish their message types and subtypes.
 
 ## Verification Checklist
 

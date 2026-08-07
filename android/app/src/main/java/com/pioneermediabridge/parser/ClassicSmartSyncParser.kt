@@ -44,6 +44,13 @@ class ClassicSmartSyncParser(
 
     private var streamingArtist = ""
     private var streamingTrack = ""
+    private var streamingAlbum = ""
+    private var streamingGenre = ""
+
+    private var radioStation = ""
+    private var radioText = ""
+    private var radioProgrammeType = ""
+    private var radioSignal = ""
 
     fun parse(records: Flow<HciRecord>): Flow<MediaInfo> = flow {
         pioneerMacBytes?.let {
@@ -109,25 +116,30 @@ class ClassicSmartSyncParser(
         val handleAndFlags = ((data[2].toInt() and 0xFF) shl 8) or (data[1].toInt() and 0xFF)
         val connHandle = handleAndFlags and 0x0FFF
         val pbFlag = (handleAndFlags shr 12) and 0x03
-
-        if (!trackedHandles.contains(connHandle)) return null
+        val isTracked = trackedHandles.contains(connHandle)
 
         val payload = data.copyOfRange(5, data.size)
         if (payload.isEmpty()) return null
 
         return when (pbFlag) {
-            PB_FIRST, PB_FIRST_NF -> handleFirstAclFragment(connHandle, payload)
-            PB_CONT -> handleContinuationAclFragment(connHandle, payload)
+            PB_FIRST, PB_FIRST_NF -> handleFirstAclFragment(connHandle, payload, isTracked)
+            PB_CONT -> if (isTracked) handleContinuationAclFragment(connHandle, payload) else null
             else -> null
         }
     }
 
-    private fun handleFirstAclFragment(connHandle: Int, payload: ByteArray): MediaInfo? {
+    private fun handleFirstAclFragment(connHandle: Int, payload: ByteArray, isTracked: Boolean): MediaInfo? {
         if (payload.size < 4) return null
 
         val l2capLen = (payload[0].toInt() and 0xFF) or ((payload[1].toInt() and 0xFF) shl 8)
         val cid = (payload[2].toInt() and 0xFF) or ((payload[3].toInt() and 0xFF) shl 8)
         val body = payload.copyOfRange(4, payload.size)
+
+        if (!isTracked) {
+            if (!looksLikeSmartSyncCarrier(body)) return null
+            trackedHandles.add(connHandle)
+            Log.i(TAG, "Recovered classic handle from RFCOMM payload: handle=0x${connHandle.toString(16).padStart(4, '0')}")
+        }
 
         if (l2capLen <= 0 || l2capLen > 4096) return null
 
@@ -160,6 +172,14 @@ class ClassicSmartSyncParser(
 
         l2capAssemblies.remove(connHandle)
         return parseL2capPdu(assembly.buffer, assembly.cid)
+    }
+
+    private fun looksLikeSmartSyncCarrier(l2capPayload: ByteArray): Boolean {
+        if (l2capPayload.size < 6) return false
+        val control = l2capPayload[1].toInt() and 0xFF
+        // RFCOMM UIH frames use control 0xEF (P/F bit may vary in some captures).
+        if ((control and 0xEF) != RFCOMM_UIH) return false
+        return l2capPayload.indexOfSequence(byteArrayOf(0x9F.toByte(), 0x02)) >= 0
     }
 
     private fun parseL2capPdu(pdu: ByteArray, cid: Int): MediaInfo? {
@@ -233,34 +253,27 @@ class ClassicSmartSyncParser(
 
         return when (messageType) {
             0x31 -> {
-                Log.d(TAG, "Classified as radio station update")
-                MediaInfo.Radio(primaryText)
+                when (subtype) {
+                    0x00 -> radioStation = primaryText
+                    0x01 -> radioText = primaryText
+                    0x02 -> radioProgrammeType = primaryText
+                    0x03 -> radioSignal = primaryText
+                    else -> {
+                        Log.v(TAG, "Unhandled radio subtype=${subtype?.let { "0x${it.toString(16)}" } ?: "n/a"}")
+                        return null
+                    }
+                }
+                Log.d(TAG, "Classified as radio detail update")
+                MediaInfo.Radio(radioStation, radioText, radioProgrammeType, radioSignal)
             }
             0x32 -> {
                 val subtypeValue = subtype ?: return null
                 when (subtype) {
-                    0x01 -> {
-                        streamingArtist = primaryText
-                        Log.d(TAG, "Classified as streaming artist update: artist='${streamingArtist.take(80)}'")
-                        MediaInfo.Streaming(streamingArtist, streamingTrack)
-                    }
-                    0x02 -> {
-                        streamingTrack = primaryText
-                        Log.d(TAG, "Classified as streaming track update: track='${streamingTrack.take(80)}'")
-                        MediaInfo.Streaming(streamingArtist, streamingTrack)
-                    }
+                    0x00 -> streamingTrack = primaryText
+                    0x01 -> streamingArtist = primaryText
+                    0x02 -> streamingAlbum = primaryText
                     0x03 -> {
-                        if (streamingArtist.isBlank() && streamingTrack.isBlank()) {
-                            Log.d(TAG, "Classified as radio fallback update")
-                            MediaInfo.Radio(primaryText)
-                        } else {
-                            Log.v(
-                                TAG,
-                                "Ignoring subtype 0x03 because streaming context exists" +
-                                    " (artist='${streamingArtist.take(40)}' track='${streamingTrack.take(40)}')"
-                            )
-                            null
-                        }
+                        streamingGenre = primaryText
                     }
                     else -> {
                         Log.v(
@@ -270,6 +283,12 @@ class ClassicSmartSyncParser(
                         null
                     }
                 }
+                Log.d(
+                    TAG,
+                    "Classified as streaming detail update: artist='${streamingArtist.take(80)}' " +
+                        "track='${streamingTrack.take(80)}'"
+                )
+                MediaInfo.Streaming(streamingArtist, streamingTrack, streamingAlbum, streamingGenre)
             }
             else -> {
                 Log.v(TAG, "Unhandled Smart Sync message type=0x${messageType.toString(16)}")

@@ -44,13 +44,9 @@ class ClassicSmartSyncParser(
 
     private var streamingArtist = ""
     private var streamingTrack = ""
-    private var streamingAlbum = ""
-    private var streamingGenre = ""
-
-    private var radioStation = ""
-    private var radioText = ""
-    private var radioProgrammeType = ""
-    private var radioSignal = ""
+    private var radioStationName = ""
+    private var radioFrequency = ""
+    private var hasActiveMedia = false
 
     fun parse(records: Flow<HciRecord>): Flow<MediaInfo> = flow {
         pioneerMacBytes?.let {
@@ -65,7 +61,7 @@ class ClassicSmartSyncParser(
             if (record.data.isEmpty()) return@collect
 
             when (record.data[0].toInt() and 0xFF) {
-                H4_EVT -> handleEvent(record.data)
+                H4_EVT -> handleEvent(record.data)?.let { emit(it) }
                 H4_ACL -> {
                     val parsed = handleAcl(record.data)
                     if (parsed != null) emit(parsed)
@@ -74,19 +70,20 @@ class ClassicSmartSyncParser(
         }
     }
 
-    private fun handleEvent(data: ByteArray) {
-        if (data.size < 3) return
-        when (data[1].toInt() and 0xFF) {
+    private fun handleEvent(data: ByteArray): MediaInfo? {
+        if (data.size < 3) return null
+        return when (data[1].toInt() and 0xFF) {
             EVT_CONNECTION_COMPLETE -> handleClassicConnectionComplete(data)
             EVT_DISCONNECT_COMPLETE -> handleDisconnect(data)
+            else -> null
         }
     }
 
-    private fun handleClassicConnectionComplete(data: ByteArray) {
+    private fun handleClassicConnectionComplete(data: ByteArray): MediaInfo? {
         // status(1), handle(2), bd_addr(6), link_type(1), enc_mode(1)
-        if (data.size < 14) return
+        if (data.size < 14) return null
         val status = data[3].toInt() and 0xFF
-        if (status != 0x00) return
+        if (status != 0x00) return null
 
         val handle = (data[4].toInt() and 0xFF) or ((data[5].toInt() and 0x0F) shl 8)
         val addr = data.copyOfRange(6, 12)
@@ -94,20 +91,30 @@ class ClassicSmartSyncParser(
 
         if (excludedMacBytes != null && addr.contentEquals(excludedMacBytes)) {
             Log.d(TAG, "Classic connection addr=$addrStr handle=0x${handle.toString(16).padStart(4, '0')} excluded (output BLE device)")
-            return
+            return null
         }
 
         if (pioneerMacBytes == null || addr.contentEquals(pioneerMacBytes)) {
             trackedHandles.add(handle)
             Log.i(TAG, "Tracking classic connection: addr=$addrStr handle=0x${handle.toString(16).padStart(4, '0')}")
         }
+        return null
     }
 
-    private fun handleDisconnect(data: ByteArray) {
-        if (data.size < 6) return
+    private fun handleDisconnect(data: ByteArray): MediaInfo? {
+        if (data.size < 6) return null
         val handle = (data[3].toInt() and 0xFF) or ((data[4].toInt() and 0x0F) shl 8)
-        trackedHandles.remove(handle)
+        val wasTracked = trackedHandles.remove(handle)
         l2capAssemblies.remove(handle)
+        if (!wasTracked || !hasActiveMedia) return null
+
+        hasActiveMedia = false
+        radioStationName = ""
+        radioFrequency = ""
+        streamingArtist = ""
+        streamingTrack = ""
+        Log.i(TAG, "Classic media connection disconnected; emitting idle")
+        return MediaInfo.Idle
     }
 
     private fun handleAcl(data: ByteArray): MediaInfo? {
@@ -188,6 +195,7 @@ class ClassicSmartSyncParser(
 
         val media = parseSmartSyncMedia(smartSync)
         if (media != null) {
+            hasActiveMedia = true
             Log.d(TAG, "Classic Smart Sync media on cid=0x${cid.toString(16)}: $media")
         }
         return media
@@ -253,28 +261,23 @@ class ClassicSmartSyncParser(
 
         return when (messageType) {
             0x31 -> {
-                when (subtype) {
-                    0x00 -> radioStation = primaryText
-                    0x01 -> radioText = primaryText
-                    0x02 -> radioProgrammeType = primaryText
-                    0x03 -> radioSignal = primaryText
-                    else -> {
-                        Log.v(TAG, "Unhandled radio subtype=${subtype?.let { "0x${it.toString(16)}" } ?: "n/a"}")
-                        return null
-                    }
+                if (subtype != 0x00) return null
+                if (primaryText.isUnavailableStationId()) return null
+
+                if (primaryText.isRadioFrequency()) {
+                    radioFrequency = primaryText
+                } else {
+                    radioStationName = primaryText
                 }
-                Log.d(TAG, "Classified as radio detail update")
-                MediaInfo.Radio(radioStation, radioText, radioProgrammeType, radioSignal)
+                val stationId = radioStationName.ifBlank { radioFrequency }
+                if (stationId.isBlank()) null else MediaInfo.Radio(stationId)
             }
             0x32 -> {
                 val subtypeValue = subtype ?: return null
                 when (subtype) {
                     0x00 -> streamingTrack = primaryText
                     0x01 -> streamingArtist = primaryText
-                    0x02 -> streamingAlbum = primaryText
-                    0x03 -> {
-                        streamingGenre = primaryText
-                    }
+                    0x02, 0x03 -> return null
                     else -> {
                         Log.v(
                             TAG,
@@ -285,10 +288,11 @@ class ClassicSmartSyncParser(
                 }
                 Log.d(
                     TAG,
-                    "Classified as streaming detail update: artist='${streamingArtist.take(80)}' " +
+                    "Classified as streaming display update: artist='${streamingArtist.take(80)}' " +
                         "track='${streamingTrack.take(80)}'"
                 )
-                MediaInfo.Streaming(streamingArtist, streamingTrack, streamingAlbum, streamingGenre)
+                if (streamingArtist.isBlank() || streamingTrack.isBlank()) null
+                else MediaInfo.Streaming(streamingArtist, streamingTrack)
             }
             else -> {
                 Log.v(TAG, "Unhandled Smart Sync message type=0x${messageType.toString(16)}")
@@ -332,6 +336,14 @@ class ClassicSmartSyncParser(
         }
         return -1
     }
+
+    private fun String.isRadioFrequency(): Boolean =
+        matches(Regex("^\\d{2,3}(?:\\.\\d{1,3})?\\s*(?:MHz|kHz)$", RegexOption.IGNORE_CASE))
+
+    private fun String.isUnavailableStationId(): Boolean =
+        equals("Not Provided", ignoreCase = true) ||
+            equals("No Station", ignoreCase = true) ||
+            equals("No Service", ignoreCase = true)
 }
 
 private fun ByteArray.toMacString(): String =

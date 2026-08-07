@@ -1,18 +1,8 @@
 package com.pioneermediabridge.model
 
 sealed class MediaInfo {
-    data class Radio(
-        val stationId: String,
-        val radioText: String = "",
-        val programmeType: String = "",
-        val signal: String = ""
-    ) : MediaInfo()
-    data class Streaming(
-        val artist: String,
-        val track: String,
-        val album: String = "",
-        val genre: String = ""
-    ) : MediaInfo()
+    data class Radio(val stationId: String) : MediaInfo()
+    data class Streaming(val artist: String, val track: String) : MediaInfo()
     data class CallOutgoing(val number: String, val name: String = "") : MediaInfo()
     data class CallIncoming(val number: String, val name: String = "") : MediaInfo()
     data object Idle : MediaInfo()
@@ -27,24 +17,20 @@ sealed class MediaInfo {
      * Each length is a byte count and does not include a terminator.
      * 0x00 = Radio:     stationIdLength, stationId
      * 0x01 = Streaming: artistLength, artist, trackLength, track
-     * 0x02 = CallOut:   nameLength, name, numberLength, number
-     * 0x03 = CallIn:    nameLength, name, numberLength, number
-     * 0x04 = Radio details: stationId, radioText, programmeType, signal
-     * 0x05 = Streaming details: artist, track, album, genre
+     * 0x02 = CallOut:   partyLength, party
+     * 0x03 = CallIn:    partyLength, party
      * 0xFF = Idle
      */
     fun toBytes(): ByteArray = when (this) {
-        is Radio -> byteArrayOf(0x04) + stationId.mediaField() + radioText.mediaField() +
-            programmeType.mediaField() + signal.mediaField()
-        is Streaming -> byteArrayOf(0x05) + artist.mediaField() + track.mediaField() +
-            album.mediaField() + genre.mediaField()
-        is CallOutgoing -> byteArrayOf(0x02) + name.mediaField() + number.mediaField()
-        is CallIncoming -> byteArrayOf(0x03) + name.mediaField() + number.mediaField()
+        is Radio -> byteArrayOf(0x00) + stationId.mediaField()
+        is Streaming -> byteArrayOf(0x01) + artist.mediaField() + track.mediaField()
+        is CallOutgoing -> byteArrayOf(0x02) + name.ifBlank { number }.mediaField()
+        is CallIncoming -> byteArrayOf(0x03) + name.ifBlank { number }.mediaField()
         is Idle -> byteArrayOf(0xFF.toByte())
     }
 
     override fun toString(): String = when (this) {
-        is Radio -> "Radio: $stationId${radioText.takeIf { it.isNotBlank() }?.let { " - $it" }.orEmpty()}"
+        is Radio -> "Radio: $stationId"
         is Streaming -> "Streaming: $artist - $track"
         is CallOutgoing -> "Calling: $number${if (name.isNotEmpty()) " ($name)" else ""}"
         is CallIncoming -> "Incoming: $number${if (name.isNotEmpty()) " ($name)" else ""}"

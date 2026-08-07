@@ -252,54 +252,12 @@ static bool log_media_payload(const uint8_t *payload, uint16_t payload_len)
 
     case 0x02:
     case 0x03:
-        if (!read_media_field(payload, payload_len, &offset, first, sizeof(first)) ||
-            !read_media_field(payload, payload_len, &offset, second, sizeof(second)))
+        if (!read_media_field(payload, payload_len, &offset, first, sizeof(first)))
         {
             return false;
         }
-        ESP_LOGI(TAG, "Media call: type=0x%02x name=%s number=%s", type, first, second);
+        ESP_LOGI(TAG, "Phone %s: %s", type == 0x02 ? "outgoing" : "incoming", first);
         return offset == payload_len;
-
-    case 0x04:
-    {
-        char radio_text[BLE_MSG_MAX_LEN + 1] = {0};
-        char programme_type[BLE_MSG_MAX_LEN + 1] = {0};
-        char signal[BLE_MSG_MAX_LEN + 1] = {0};
-        if (!read_media_field(payload, payload_len, &offset, first, sizeof(first)) ||
-            !read_media_field(payload, payload_len, &offset, radio_text, sizeof(radio_text)) ||
-            !read_media_field(payload, payload_len, &offset, programme_type, sizeof(programme_type)) ||
-            !read_media_field(payload, payload_len, &offset, signal, sizeof(signal)))
-        {
-            return false;
-        }
-        ESP_LOGI(TAG,
-                 "Radio: station=%s text=%s programme-type=%s signal=%s",
-                 first,
-                 radio_text,
-                 programme_type,
-                 signal);
-        return offset == payload_len;
-    }
-
-    case 0x05:
-    {
-        char album[BLE_MSG_MAX_LEN + 1] = {0};
-        char genre[BLE_MSG_MAX_LEN + 1] = {0};
-        if (!read_media_field(payload, payload_len, &offset, first, sizeof(first)) ||
-            !read_media_field(payload, payload_len, &offset, second, sizeof(second)) ||
-            !read_media_field(payload, payload_len, &offset, album, sizeof(album)) ||
-            !read_media_field(payload, payload_len, &offset, genre, sizeof(genre)))
-        {
-            return false;
-        }
-        ESP_LOGI(TAG,
-                 "Streaming: artist=%s track=%s album=%s genre=%s",
-                 first,
-                 second,
-                 album,
-                 genre);
-        return offset == payload_len;
-    }
 
     case 0xff:
         if (payload_len == 1)
@@ -391,7 +349,6 @@ static int gatt_message_write(uint16_t conn_handle,
 
     if (log_media_payload(payload, copied))
     {
-        ESP_LOGI(TAG, "BLE media payload received: len=%u", copied);
         return 0;
     }
 

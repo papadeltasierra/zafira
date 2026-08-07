@@ -55,7 +55,7 @@ Write behavior:
 - Writes are serialized with a queue and `WRITE_SETTLE_MS = 50` ms.
 - ESP32 accepts write and write-no-response on both characteristics.
 - ESP32 preferred ATT MTU is 128 bytes; the Android client requests 128 and uses the negotiated result.
-- Streaming artist and track fields are each limited to 61 UTF-8 bytes plus a one-byte length.
+- Display fields are each limited to 61 UTF-8 bytes plus a one-byte length.
 - Oversized text fields are UTF-8 safely truncated and end with ASCII `...`.
 - ESP32 max application payload length is `BLE_MSG_MAX_LEN = 256` bytes.
 
@@ -65,10 +65,8 @@ Defined by `MediaInfo.toBytes()`:
 
 - `0x00`: Radio -> `stationIdLength, stationId`
 - `0x01`: Streaming -> `artistLength, artist, trackLength, track`
-- `0x02`: CallOutgoing -> `nameLength, name, numberLength, number`
-- `0x03`: CallIncoming -> `nameLength, name, numberLength, number`
-- `0x04`: Radio details -> `stationLength, station, textLength, text, programmeTypeLength, programmeType, signalLength, signal`
-- `0x05`: Streaming details -> `artistLength, artist, trackLength, track, albumLength, album, genreLength, genre`
+- `0x02`: CallOutgoing -> `partyLength, party`
+- `0x03`: CallIncoming -> `partyLength, party`
 - `0xFF`: Idle (single byte)
 
 Encoding details:
@@ -106,10 +104,10 @@ Schedule:
 
 Media extraction is based on Smart Sync frames carried over classic Bluetooth RFCOMM:
 
-- `0x31` radio details: subtype `0x00` station or frequency, `0x01` radio text, `0x02` programme type, `0x03` signal indicator
-- `0x32` streaming details: subtype `0x00` track, `0x01` artist, `0x02` album, `0x03` genre
+- `0x31/0x00`: radio station ID or frequency. A station ID is preferred; frequency is used only until a station ID is received.
+- `0x32/0x00`: streaming track; `0x32/0x01`: artist. The bridge sends a streaming record only once both values are available.
 
-The Android bridge retains the most recent value for each field and writes the complete structured record after each update.
+The Android bridge forwards only display-required fields. Radio text, programme type, signal, album, and genre are discarded.
 
 ## Current Limitations And Risks
 

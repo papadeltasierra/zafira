@@ -29,6 +29,7 @@ class BleWriterManager(private val context: Context) {
     private var gatt: BluetoothGatt? = null
     private var mediaChar: BluetoothGattCharacteristic? = null
     private var timeChar: BluetoothGattCharacteristic? = null
+    private var powerUpChar: BluetoothGattCharacteristic? = null
     private var mtuRequestPending = false
 
     // Serialised write queue – only one outstanding write at a time
@@ -61,6 +62,7 @@ class BleWriterManager(private val context: Context) {
                     Log.i(TAG, "GATT disconnected (status=$status)")
                     mediaChar = null
                     timeChar = null
+                    powerUpChar = null
                     writeQueue.clear()
                     writePending = false
                     timeSyncJob?.cancel()
@@ -94,7 +96,8 @@ class BleWriterManager(private val context: Context) {
             }
             mediaChar = svc.getCharacteristic(BleConstants.MEDIA_INFO_CHAR_UUID)
             timeChar = svc.getCharacteristic(BleConstants.TIME_SYNC_CHAR_UUID)
-            if (mediaChar == null || timeChar == null) {
+            powerUpChar = svc.getCharacteristic(BleConstants.POWER_UP_CHAR_UUID)
+            if (mediaChar == null || timeChar == null || powerUpChar == null) {
                 Log.w(TAG, "Required characteristics missing")
                 g.disconnect()
                 return
@@ -146,12 +149,23 @@ class BleWriterManager(private val context: Context) {
     // ── Internal helpers ──────────────────────────────────────────────────────
 
     private fun onReady() {
+        sendPowerUp()
         sendTimeNow()
         timeSyncJob = scope?.launch {
             while (isActive) {
                 delay(BleConstants.TIME_SYNC_INTERVAL_MS)
                 sendTimeNow()
             }
+        }
+    }
+
+    private fun sendPowerUp() {
+        try {
+            // Send a single byte (0x01) to indicate power-up/initialization
+            enqueue(powerUpChar, byteArrayOf(0x01))
+            Log.i(TAG, "Power-up indication sent to ESP32")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to send power-up indication", e)
         }
     }
 
@@ -200,6 +214,7 @@ class BleWriterManager(private val context: Context) {
         timeSyncJob?.cancel()
         mediaChar = null
         timeChar = null
+        powerUpChar = null
         writeQueue.clear()
         gatt?.close()
         gatt = null

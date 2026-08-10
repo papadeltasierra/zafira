@@ -31,7 +31,9 @@ static uint8_t s_addr_type;
 static ble_uuid128_t s_service_uuid;
 static ble_uuid128_t s_media_info_char_uuid;
 static ble_uuid128_t s_time_sync_char_uuid;
+static ble_uuid128_t s_power_up_char_uuid;
 static uint16_t s_time_sync_char_handle;
+static uint16_t s_power_up_char_handle;
 static QueueHandle_t s_display_queue;
 
 typedef struct
@@ -320,6 +322,12 @@ static bool log_rds_clock_time(const uint8_t *payload, uint16_t payload_len)
 
 static void process_display_message(const display_message_t *message)
 {
+    if (message->attr_handle == s_power_up_char_handle)
+    {
+        ESP_LOGI(TAG, "Power-up indication received from Android app");
+        return;
+    }
+
     if (message->attr_handle == s_time_sync_char_handle)
     {
         if (!log_rds_clock_time(message->payload, message->payload_len))
@@ -415,6 +423,12 @@ static const struct ble_gatt_svc_def gatt_svcs[] = {
                 .uuid = &s_time_sync_char_uuid.u,
                 .access_cb = gatt_message_write,
                 .val_handle = &s_time_sync_char_handle,
+                .flags = BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_NO_RSP,
+            },
+            {
+                .uuid = &s_power_up_char_uuid.u,
+                .access_cb = gatt_message_write,
+                .val_handle = &s_power_up_char_handle,
                 .flags = BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_NO_RSP,
             },
             {0},
@@ -635,6 +649,8 @@ void app_main(void)
     s_media_info_char_uuid.value[0] = 0x02;
     s_time_sync_char_uuid = s_service_uuid;
     s_time_sync_char_uuid.value[0] = 0x03;
+    s_power_up_char_uuid = s_service_uuid;
+    s_power_up_char_uuid.value[0] = 0x04;
 
     nimble_port_init();
 

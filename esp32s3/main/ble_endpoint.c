@@ -15,6 +15,7 @@
 #include "nimble/nimble_port.h"
 #include "nimble/nimble_port_freertos.h"
 #include "nvs_flash.h"
+#include "opel_mid.h"
 #include "store/config/ble_store_config.h"
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
@@ -32,9 +33,11 @@ static ble_uuid128_t s_service_uuid;
 static ble_uuid128_t s_media_info_char_uuid;
 static ble_uuid128_t s_time_sync_char_uuid;
 static ble_uuid128_t s_power_up_char_uuid;
+static uint16_t s_media_info_char_handle;
 static uint16_t s_time_sync_char_handle;
 static uint16_t s_power_up_char_handle;
 static QueueHandle_t s_display_queue;
+static opel_mid_handle_t s_opel_mid;
 
 typedef struct
 {
@@ -285,9 +288,29 @@ static bool log_media_payload(const uint8_t *payload, uint16_t payload_len)
     }
 }
 
+static bool is_media_idle(const uint8_t *payload, uint16_t payload_len)
+{
+    return payload_len == 1 && payload[0] == 0xff;
+}
+
+static void send_fixed_media_frame(void)
+{
+    const char text[] = {0x0a, 0x04, 'B', 'B', 'C', ' ', 'R', '4', ' ', ' ', '\0'};
+    const opel_mid_symbols_t symbols = {
+        .radio = 0x2a,
+        .tape = 0x00,
+        .cd = 0x00,
+    };
+    esp_err_t err = opel_mid_send(s_opel_mid, text, &symbols);
+    if (err != ESP_OK)
+    {
+        ESP_LOGW(TAG, "Failed to send media frame, err=%s", esp_err_to_name(err));
+    }
+}
+
 static bool log_rds_clock_time(const uint8_t *payload, uint16_t payload_len)
 {
-    if (payload_len != 5 || (payload[4] & 0x3f) != 0)
+    if (payload_len != 5)
     {
         return false;
     }
@@ -325,6 +348,11 @@ static void process_display_message(const display_message_t *message)
     if (message->attr_handle == s_power_up_char_handle)
     {
         ESP_LOGI(TAG, "Power-up indication received from Android app");
+        esp_err_t err = opel_mid_power_on(s_opel_mid);
+        if (err != ESP_OK)
+        {
+            ESP_LOGW(TAG, "Failed to power on display, err=%s", esp_err_to_name(err));
+        }
         return;
     }
 
@@ -337,8 +365,16 @@ static void process_display_message(const display_message_t *message)
         return;
     }
 
-    if (log_media_payload(message->payload, message->payload_len))
+    if (message->attr_handle == s_media_info_char_handle)
     {
+        if (is_media_idle(message->payload, message->payload_len))
+        {
+            ESP_LOGI(TAG, "Media idle");
+            return;
+        }
+
+        log_media_payload(message->payload, message->payload_len);
+        send_fixed_media_frame();
         return;
     }
 
@@ -417,6 +453,7 @@ static const struct ble_gatt_svc_def gatt_svcs[] = {
             {
                 .uuid = &s_media_info_char_uuid.u,
                 .access_cb = gatt_message_write,
+                .val_handle = &s_media_info_char_handle,
                 .flags = BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_NO_RSP,
             },
             {
@@ -609,6 +646,14 @@ void app_main(void)
         err = nvs_flash_init();
     }
     ESP_ERROR_CHECK(err);
+
+    const opel_mid_config_t display_config = {
+        .pin_sda = CONFIG_ZAFIRA_DISPLAY_SDA_GPIO,
+        .pin_scl = CONFIG_ZAFIRA_DISPLAY_SCL_GPIO,
+        .pin_mrq = CONFIG_ZAFIRA_DISPLAY_MRQ_GPIO,
+        .type = OPEL_MID_TYPE_TID_10,
+    };
+    ESP_ERROR_CHECK(opel_mid_init(&display_config, &s_opel_mid));
 
     s_display_queue = xQueueCreate(CONFIG_ZAFIRA_DISPLAY_QUEUE_DEPTH, sizeof(display_message_t));
     if (s_display_queue == NULL)

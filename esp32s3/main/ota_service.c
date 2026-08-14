@@ -14,7 +14,8 @@
 #include "psa/crypto.h"
 
 #define OTA_TASK_STACK_SIZE 4096
-#define OTA_TASK_CORE 0
+// Core 1 keeps the slow flash writes off the core running the NimBLE host and controller.
+#define OTA_TASK_CORE 1
 #define OTA_QUEUE_DEPTH 32
 #define OTA_MAX_CHUNK 512
 #define OTA_COMMIT_FLUSH_MS 200

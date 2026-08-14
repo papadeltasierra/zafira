@@ -159,6 +159,10 @@ idf.py -p <PORT> flash monitor
 ### 3.2 New module `esp32s3/main/ota_service.c`
 
 Owns the OTA state machine, keeping `ble_endpoint.c` limited to GATT plumbing.
+The task is pinned to **core 1**, away from the NimBLE host, BT controller and
+`app_main`, which are all on core 0. This only removes scheduler contention:
+`esp_ota_write` suspends flash cache access for both cores, so the ACK window
+remains the real protection against the phone outrunning the device.
 
 States: `IDLE → RECEIVING → VERIFYING → COMMITTED`.
 

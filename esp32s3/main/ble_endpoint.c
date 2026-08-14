@@ -521,7 +521,13 @@ static void build_firmware_info(uint8_t out[FIRMWARE_INFO_LEN])
     if (s_conn_handle != BLE_HS_CONN_HANDLE_NONE)
     {
         uint16_t mtu = ble_att_mtu(s_conn_handle);
-        max_chunk = (mtu > 5) ? (uint32_t)(mtu - 3 - 2) : 0;
+        // A write must fit both the MTU and the 512-octet attribute value limit.
+        uint16_t att_payload = (mtu > 3) ? (uint16_t)(mtu - 3) : 0;
+        if (att_payload > 512)
+        {
+            att_payload = 512;
+        }
+        max_chunk = (att_payload > 2) ? (uint32_t)(att_payload - 2) : 0;
     }
 
     out[0] = s_firmware_version[0];

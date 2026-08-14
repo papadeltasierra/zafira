@@ -98,6 +98,11 @@ class OtaTransferManager(private val scope: CoroutineScope) {
         }
     }
 
+    fun onWriteRejected(statusCode: Int) {
+        if (!isActive) return
+        fail("Bluetooth rejected the write (code $statusCode)")
+    }
+
     /** Called when the device reports its version again, typically after the post-OTA reboot. */
     fun onFirmwareInfo(info: FirmwareInfo) {
         if (_progress.value.phase != OtaPhase.REBOOTING) return
@@ -113,8 +118,7 @@ class OtaTransferManager(private val scope: CoroutineScope) {
         }
     }
 
-    fun onControlNotification(data: ByteArray) {
-        if (data.isEmpty()) return
+    fun onControlNotification(data: ByteArray) {        if (data.isEmpty()) return
         armWatchdog()
 
         when (data[0].toInt() and 0xFF) {

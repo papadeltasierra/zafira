@@ -330,12 +330,14 @@ class BleWriterManager(private val context: Context) : OtaGatt {
 
     override val chunkSize: Int
         get() {
+            // A write must fit both the negotiated MTU and the 512-octet attribute limit.
+            val attPayload = minOf(negotiatedMtu - 3, OtaProtocol.MAX_ATTRIBUTE_LENGTH)
+            val localLimit = attPayload - OtaProtocol.SEQUENCE_HEADER_LEN
             val deviceLimit = _firmwareInfo.value?.maxChunk ?: 0
-            val localLimit = negotiatedMtu - 3 - 2
             return when {
+                localLimit < OtaProtocol.FALLBACK_CHUNK -> OtaProtocol.FALLBACK_CHUNK
                 deviceLimit > 0 -> minOf(deviceLimit, localLimit)
-                localLimit > 0 -> localLimit
-                else -> OtaProtocol.FALLBACK_CHUNK
+                else -> localLimit
             }
         }
 
@@ -415,7 +417,13 @@ class BleWriterManager(private val context: Context) : OtaGatt {
         writePending = true
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                g.writeCharacteristic(char, data, pending.writeType)
+                val result = g.writeCharacteristic(char, data, pending.writeType)
+                if (result != BluetoothStatusCodes.SUCCESS) {
+                    Log.w(TAG, "Write rejected (code=$result, ${data.size} bytes) on ${char.uuid}")
+                    writePending = false
+                    otaTransfer?.onWriteRejected(result)
+                    return
+                }
             } else {
                 @Suppress("DEPRECATION")
                 char.value = data

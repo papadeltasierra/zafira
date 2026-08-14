@@ -18,6 +18,9 @@ object OtaProtocol {
     const val REBOOT_TIMEOUT_MS = 120_000L
     /** Used until the device reports its own limit in Firmware Info. */
     const val FALLBACK_CHUNK = 20
+    /** Bluetooth core spec maximum attribute value length. */
+    const val MAX_ATTRIBUTE_LENGTH = 512
+    const val SEQUENCE_HEADER_LEN = 2
 
     fun errorMessage(reason: Int): String = when (reason) {
         1 -> "Device is busy with another update"

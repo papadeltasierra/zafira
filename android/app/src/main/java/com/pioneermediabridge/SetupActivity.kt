@@ -13,6 +13,7 @@ import android.widget.ArrayAdapter
 import android.widget.AutoCompleteTextView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
@@ -21,7 +22,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.pioneermediabridge.databinding.ActivitySetupBinding
+import com.pioneermediabridge.ble.BleSession
 import com.pioneermediabridge.model.AppSettings
+import com.pioneermediabridge.ui.FirmwareUpdateFlow
 import com.pioneermediabridge.ui.SetupViewModel
 import kotlinx.coroutines.launch
 
@@ -30,6 +33,13 @@ class SetupActivity : AppCompatActivity() {
     private lateinit var binding: ActivitySetupBinding
     private val viewModel: SetupViewModel by viewModels()
     private var knownDevices: List<KnownBluetoothDevice> = emptyList()
+
+    private val openFirmwareLauncher: ActivityResultLauncher<Array<String>> =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            firmwareFlow.onDocumentPicked(uri)
+        }
+
+    private lateinit var firmwareFlow: FirmwareUpdateFlow
 
     private val bluetoothPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -57,6 +67,9 @@ class SetupActivity : AppCompatActivity() {
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
 
         loadKnownDevicesWhenAllowed()
+        firmwareFlow = FirmwareUpdateFlow(this, this) {
+            openFirmwareLauncher.launch(arrayOf("application/octet-stream", "*/*"))
+        }
         binding.editPioneerName.afterTextChanged {
             updateMacDropdown(it, binding.editPioneerMac)
         }
@@ -76,6 +89,23 @@ class SetupActivity : AppCompatActivity() {
             }
         }
 
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                val info = BleSession.writer?.firmwareInfo ?: return@repeatOnLifecycle
+                info.collect { firmware ->
+                    binding.textDeviceFirmware.text = when {
+                        firmware == null -> getString(R.string.firmware_unknown)
+                        firmware.pendingVerify -> getString(
+                            R.string.firmware_device_version_verifying,
+                            firmware.version.toString()
+                        )
+                        else -> getString(R.string.firmware_device_version, firmware.version.toString())
+                    }
+                }
+            }
+        }
+
+        binding.buttonUpdateFirmware.setOnClickListener { firmwareFlow.onPickRequested() }
         binding.buttonSave.setOnClickListener { saveSettings() }
         binding.buttonDefaultPath.setOnClickListener {
             binding.editSnoopPath.setText(AppSettings.DEFAULT_SNOOP_PATH)

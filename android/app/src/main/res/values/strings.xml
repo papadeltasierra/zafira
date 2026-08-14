@@ -36,4 +36,33 @@
 
     <!-- Menu -->
     <string name="action_settings">Settings</string>
+
+    <!-- Firmware update -->
+    <string name="section_firmware">Firmware Update (over BLE)</string>
+    <string name="firmware_hint_body">Place the .bin image in the Download folder, then select it below. The device reboots when the update completes.</string>
+    <string name="firmware_unknown">Device firmware: unknown (not connected)</string>
+    <string name="firmware_device_version">Device firmware: %1$s</string>
+    <string name="firmware_device_version_verifying">Device firmware: %1$s (verifying new image…)</string>
+    <string name="firmware_select_image">Select image from Download…</string>
+    <string name="firmware_not_connected">Connect to the device before updating its firmware.</string>
+    <string name="firmware_ota_unsupported">The connected device firmware does not support OTA updates.</string>
+    <string name="firmware_no_images">No .bin files found in the Download folder.</string>
+    <string name="firmware_pick_title">Select firmware image</string>
+    <string name="firmware_invalid_title">Image rejected</string>
+    <string name="firmware_read_failed">Could not read the selected file.</string>
+
+    <string name="ota_confirm_title">Confirm firmware update</string>
+    <string name="ota_confirm_title_downgrade">Confirm firmware DOWNGRADE</string>
+    <string name="ota_confirm_final_title">Final confirmation</string>
+    <string name="ota_confirm_checkbox">I understand the device will reboot and may be unavailable.</string>
+    <string name="ota_action_update">Update</string>
+    <string name="ota_action_downgrade">Downgrade</string>
+    <string name="ota_action_reinstall">Reinstall</string>
+    <string name="ota_progress_title">Updating firmware</string>
+    <string name="ota_progress_detail">%1$d of %2$d KB</string>
+
+    <string name="ota_banner_waiting">Firmware update sent — waiting for device to reboot</string>
+    <string name="ota_banner_verifying">Device is verifying the new firmware…</string>
+    <string name="ota_banner_success">Firmware updated: %1$s</string>
+    <string name="ota_banner_failed">Firmware update failed: %1$s</string>
 </resources>

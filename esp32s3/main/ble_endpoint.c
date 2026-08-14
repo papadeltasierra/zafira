@@ -3,8 +3,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
+#include "esp_app_desc.h"
 #include "esp_err.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -15,6 +17,8 @@
 #include "nimble/nimble_port.h"
 #include "nimble/nimble_port_freertos.h"
 #include "nvs_flash.h"
+#include "opel_mid.h"
+#include "ota_service.h"
 #include "store/config/ble_store_config.h"
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
@@ -25,6 +29,7 @@ void ble_store_config_init(void);
 #define BLE_MSG_MAX_LEN 256
 #define DISPLAY_TASK_CORE 1
 #define DISPLAY_TASK_STACK_SIZE 4096
+#define FIRMWARE_INFO_LEN 12
 
 static const char *TAG = "zafira_ble";
 static uint8_t s_addr_type;
@@ -32,9 +37,19 @@ static ble_uuid128_t s_service_uuid;
 static ble_uuid128_t s_media_info_char_uuid;
 static ble_uuid128_t s_time_sync_char_uuid;
 static ble_uuid128_t s_power_up_char_uuid;
+static ble_uuid128_t s_firmware_info_char_uuid;
+static ble_uuid128_t s_ota_control_char_uuid;
+static ble_uuid128_t s_ota_data_char_uuid;
+static uint16_t s_media_info_char_handle;
 static uint16_t s_time_sync_char_handle;
 static uint16_t s_power_up_char_handle;
+static uint16_t s_firmware_info_char_handle;
+static uint16_t s_ota_control_char_handle;
+static uint16_t s_ota_data_char_handle;
+static uint16_t s_conn_handle = BLE_HS_CONN_HANDLE_NONE;
+static uint8_t s_firmware_version[3];
 static QueueHandle_t s_display_queue;
+static opel_mid_handle_t s_opel_mid;
 
 typedef struct
 {
@@ -285,9 +300,29 @@ static bool log_media_payload(const uint8_t *payload, uint16_t payload_len)
     }
 }
 
+static bool is_media_idle(const uint8_t *payload, uint16_t payload_len)
+{
+    return payload_len == 1 && payload[0] == 0xff;
+}
+
+static void send_fixed_media_frame(void)
+{
+    const char text[] = {0x0a, 0x04, 'B', 'B', 'C', ' ', 'R', '4', ' ', ' ', '\0'};
+    const opel_mid_symbols_t symbols = {
+        .radio = 0x2a,
+        .tape = 0x00,
+        .cd = 0x00,
+    };
+    esp_err_t err = opel_mid_send(s_opel_mid, text, &symbols);
+    if (err != ESP_OK)
+    {
+        ESP_LOGW(TAG, "Failed to send media frame, err=%s", esp_err_to_name(err));
+    }
+}
+
 static bool log_rds_clock_time(const uint8_t *payload, uint16_t payload_len)
 {
-    if (payload_len != 5 || (payload[4] & 0x3f) != 0)
+    if (payload_len != 5)
     {
         return false;
     }
@@ -325,6 +360,11 @@ static void process_display_message(const display_message_t *message)
     if (message->attr_handle == s_power_up_char_handle)
     {
         ESP_LOGI(TAG, "Power-up indication received from Android app");
+        esp_err_t err = opel_mid_power_on(s_opel_mid);
+        if (err != ESP_OK)
+        {
+            ESP_LOGW(TAG, "Failed to power on display, err=%s", esp_err_to_name(err));
+        }
         return;
     }
 
@@ -337,8 +377,16 @@ static void process_display_message(const display_message_t *message)
         return;
     }
 
-    if (log_media_payload(message->payload, message->payload_len))
+    if (message->attr_handle == s_media_info_char_handle)
     {
+        if (is_media_idle(message->payload, message->payload_len))
+        {
+            ESP_LOGI(TAG, "Media idle");
+            return;
+        }
+
+        log_media_payload(message->payload, message->payload_len);
+        send_fixed_media_frame();
         return;
     }
 
@@ -384,6 +432,12 @@ static int gatt_message_write(uint16_t conn_handle,
         return BLE_ATT_ERR_UNLIKELY;
     }
 
+    if (ota_service_is_active())
+    {
+        // Media and time traffic is dropped while an image transfer owns the flash.
+        return 0;
+    }
+
     uint16_t msg_len = OS_MBUF_PKTLEN(ctxt->om);
     if (msg_len > BLE_MSG_MAX_LEN)
     {
@@ -409,6 +463,178 @@ static int gatt_message_write(uint16_t conn_handle,
     return 0;
 }
 
+// Parses "MAJOR.MINOR.PATCH" with optional pre-release/build suffix. Anything else is 0.0.0.
+static void parse_firmware_version(const char *version, uint8_t out[3])
+{
+    out[0] = 0;
+    out[1] = 0;
+    out[2] = 0;
+
+    if (version == NULL)
+    {
+        return;
+    }
+
+    unsigned long parts[3] = {0};
+    const char *cursor = version;
+
+    for (int i = 0; i < 3; ++i)
+    {
+        if (!isdigit((unsigned char)*cursor))
+        {
+            return;
+        }
+
+        char *end = NULL;
+        parts[i] = strtoul(cursor, &end, 10);
+        if (end == cursor || parts[i] > 255)
+        {
+            return;
+        }
+        cursor = end;
+
+        if (i < 2)
+        {
+            if (*cursor != '.')
+            {
+                return;
+            }
+            ++cursor;
+        }
+    }
+
+    if (*cursor != '\0' && *cursor != '-' && *cursor != '+')
+    {
+        return;
+    }
+
+    out[0] = (uint8_t)parts[0];
+    out[1] = (uint8_t)parts[1];
+    out[2] = (uint8_t)parts[2];
+}
+
+static void build_firmware_info(uint8_t out[FIRMWARE_INFO_LEN])
+{
+    uint32_t slot_size = ota_service_slot_size();
+    uint32_t max_chunk = 0;
+
+    if (s_conn_handle != BLE_HS_CONN_HANDLE_NONE)
+    {
+        uint16_t mtu = ble_att_mtu(s_conn_handle);
+        // A write must fit both the MTU and the 512-octet attribute value limit.
+        uint16_t att_payload = (mtu > 3) ? (uint16_t)(mtu - 3) : 0;
+        if (att_payload > 512)
+        {
+            att_payload = 512;
+        }
+        max_chunk = (att_payload > 2) ? (uint32_t)(att_payload - 2) : 0;
+    }
+
+    out[0] = s_firmware_version[0];
+    out[1] = s_firmware_version[1];
+    out[2] = s_firmware_version[2];
+    out[3] = ota_service_image_state();
+    memcpy(&out[4], &slot_size, sizeof(slot_size));
+    memcpy(&out[8], &max_chunk, sizeof(max_chunk));
+}
+
+static void notify_firmware_info(void)
+{
+    if (s_conn_handle == BLE_HS_CONN_HANDLE_NONE || s_firmware_info_char_handle == 0)
+    {
+        return;
+    }
+
+    uint8_t info[FIRMWARE_INFO_LEN];
+    build_firmware_info(info);
+
+    struct os_mbuf *om = ble_hs_mbuf_from_flat(info, sizeof(info));
+    if (om == NULL)
+    {
+        return;
+    }
+
+    int rc = ble_gatts_notify_custom(s_conn_handle, s_firmware_info_char_handle, om);
+    if (rc != 0)
+    {
+        ESP_LOGW(TAG, "Firmware info notify failed, rc=%d", rc);
+    }
+}
+
+static void ota_notify(const uint8_t *data, uint16_t len)
+{
+    if (s_conn_handle == BLE_HS_CONN_HANDLE_NONE || s_ota_control_char_handle == 0)
+    {
+        return;
+    }
+
+    struct os_mbuf *om = ble_hs_mbuf_from_flat(data, len);
+    if (om == NULL)
+    {
+        return;
+    }
+
+    int rc = ble_gatts_notify_custom(s_conn_handle, s_ota_control_char_handle, om);
+    if (rc != 0)
+    {
+        ESP_LOGW(TAG, "OTA notify failed, rc=%d", rc);
+    }
+}
+
+static int gatt_firmware_info_access(uint16_t conn_handle,
+                                     uint16_t attr_handle,
+                                     struct ble_gatt_access_ctxt *ctxt,
+                                     void *arg)
+{
+    (void)conn_handle;
+    (void)attr_handle;
+    (void)arg;
+
+    if (ctxt->op != BLE_GATT_ACCESS_OP_READ_CHR)
+    {
+        return BLE_ATT_ERR_UNLIKELY;
+    }
+
+    uint8_t info[FIRMWARE_INFO_LEN];
+    build_firmware_info(info);
+    return os_mbuf_append(ctxt->om, info, sizeof(info)) == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
+}
+
+static int gatt_ota_write(uint16_t conn_handle,
+                          uint16_t attr_handle,
+                          struct ble_gatt_access_ctxt *ctxt,
+                          void *arg)
+{
+    (void)conn_handle;
+    (void)arg;
+
+    if (ctxt->op != BLE_GATT_ACCESS_OP_WRITE_CHR)
+    {
+        return BLE_ATT_ERR_UNLIKELY;
+    }
+
+    uint8_t buffer[OTA_MAX_WRITE_LEN];
+    uint16_t msg_len = OS_MBUF_PKTLEN(ctxt->om);
+    if (msg_len > sizeof(buffer))
+    {
+        return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
+    }
+
+    uint16_t copied = 0;
+    int rc = ble_hs_mbuf_to_flat(ctxt->om, buffer, sizeof(buffer), &copied);
+    if (rc != 0 || copied != msg_len)
+    {
+        return BLE_ATT_ERR_UNLIKELY;
+    }
+
+    if (attr_handle == s_ota_control_char_handle)
+    {
+        return ota_service_handle_control(buffer, msg_len);
+    }
+
+    return ota_service_handle_data(buffer, msg_len);
+}
+
 static const struct ble_gatt_svc_def gatt_svcs[] = {
     {
         .type = BLE_GATT_SVC_TYPE_PRIMARY,
@@ -417,6 +643,7 @@ static const struct ble_gatt_svc_def gatt_svcs[] = {
             {
                 .uuid = &s_media_info_char_uuid.u,
                 .access_cb = gatt_message_write,
+                .val_handle = &s_media_info_char_handle,
                 .flags = BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_NO_RSP,
             },
             {
@@ -430,6 +657,24 @@ static const struct ble_gatt_svc_def gatt_svcs[] = {
                 .access_cb = gatt_message_write,
                 .val_handle = &s_power_up_char_handle,
                 .flags = BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_NO_RSP,
+            },
+            {
+                .uuid = &s_firmware_info_char_uuid.u,
+                .access_cb = gatt_firmware_info_access,
+                .val_handle = &s_firmware_info_char_handle,
+                .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_NOTIFY,
+            },
+            {
+                .uuid = &s_ota_control_char_uuid.u,
+                .access_cb = gatt_ota_write,
+                .val_handle = &s_ota_control_char_handle,
+                .flags = BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_ENC | BLE_GATT_CHR_F_NOTIFY,
+            },
+            {
+                .uuid = &s_ota_data_char_uuid.u,
+                .access_cb = gatt_ota_write,
+                .val_handle = &s_ota_data_char_handle,
+                .flags = BLE_GATT_CHR_F_WRITE_NO_RSP | BLE_GATT_CHR_F_WRITE_ENC,
             },
             {0},
         },
@@ -449,6 +694,7 @@ static int gap_event(struct ble_gap_event *event, void *arg)
         if (event->connect.status == 0)
         {
             ESP_LOGI(TAG, "Phone connected (handle=%d)", event->connect.conn_handle);
+            s_conn_handle = event->connect.conn_handle;
             ble_gattc_exchange_mtu(event->connect.conn_handle, NULL, NULL);
             ble_gap_security_initiate(event->connect.conn_handle);
         }
@@ -463,8 +709,17 @@ static int gap_event(struct ble_gap_event *event, void *arg)
         ESP_LOGI(TAG, "MTU negotiated (handle=%d, mtu=%d)", event->mtu.conn_handle, event->mtu.value);
         break;
 
+    case BLE_GAP_EVENT_SUBSCRIBE:
+        if (event->subscribe.attr_handle == s_firmware_info_char_handle && event->subscribe.cur_notify)
+        {
+            notify_firmware_info();
+        }
+        break;
+
     case BLE_GAP_EVENT_DISCONNECT:
         ESP_LOGI(TAG, "Phone disconnected (reason=%d), restarting advertising", event->disconnect.reason);
+        ota_service_on_disconnect();
+        s_conn_handle = BLE_HS_CONN_HANDLE_NONE;
         start_advertising();
         break;
 
@@ -486,6 +741,16 @@ static int gap_event(struct ble_gap_event *event, void *arg)
                      desc.sec_state.encrypted,
                      desc.sec_state.bonded,
                      desc.sec_state.key_size);
+
+            if (event->enc_change.status == 0 && desc.sec_state.encrypted)
+            {
+                // Reaching an encrypted link is the post-OTA self-test.
+                if (ota_service_image_state() != 0)
+                {
+                    ota_service_mark_valid();
+                    notify_firmware_info();
+                }
+            }
         }
         else
         {
@@ -610,6 +875,14 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(err);
 
+    const opel_mid_config_t display_config = {
+        .pin_sda = CONFIG_ZAFIRA_DISPLAY_SDA_GPIO,
+        .pin_scl = CONFIG_ZAFIRA_DISPLAY_SCL_GPIO,
+        .pin_mrq = CONFIG_ZAFIRA_DISPLAY_MRQ_GPIO,
+        .type = OPEL_MID_TYPE_TID_10,
+    };
+    ESP_ERROR_CHECK(opel_mid_init(&display_config, &s_opel_mid));
+
     s_display_queue = xQueueCreate(CONFIG_ZAFIRA_DISPLAY_QUEUE_DEPTH, sizeof(display_message_t));
     if (s_display_queue == NULL)
     {
@@ -651,6 +924,28 @@ void app_main(void)
     s_time_sync_char_uuid.value[0] = 0x03;
     s_power_up_char_uuid = s_service_uuid;
     s_power_up_char_uuid.value[0] = 0x04;
+    s_firmware_info_char_uuid = s_service_uuid;
+    s_firmware_info_char_uuid.value[0] = 0x05;
+    s_ota_control_char_uuid = s_service_uuid;
+    s_ota_control_char_uuid.value[0] = 0x06;
+    s_ota_data_char_uuid = s_service_uuid;
+    s_ota_data_char_uuid.value[0] = 0x07;
+
+    const esp_app_desc_t *app_desc = esp_app_get_description();
+    parse_firmware_version(app_desc != NULL ? app_desc->version : NULL, s_firmware_version);
+    ESP_LOGI(TAG,
+             "Firmware version: %u.%u.%u (from '%s')",
+             s_firmware_version[0],
+             s_firmware_version[1],
+             s_firmware_version[2],
+             app_desc != NULL ? app_desc->version : "");
+
+    err = ota_service_init(ota_notify);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "OTA service unavailable: %s", esp_err_to_name(err));
+        return;
+    }
 
     nimble_port_init();
 

@@ -13,6 +13,7 @@ import androidx.lifecycle.lifecycleScope
 import com.pioneermediabridge.MainActivity
 import com.pioneermediabridge.R
 import com.pioneermediabridge.ble.BleConnectionState
+import com.pioneermediabridge.ble.BleSession
 import com.pioneermediabridge.ble.BleWriterManager
 import com.pioneermediabridge.model.AppSettings
 import com.pioneermediabridge.model.MediaInfo
@@ -79,6 +80,7 @@ class MonitorService : LifecycleService() {
 
     override fun onDestroy() {
         monitorJob?.cancel()
+        BleSession.writer = null
         bleWriter.stop()
         currentBleState = BleConnectionState.DISCONNECTED
         broadcastStatus(lastMediaInfo, currentBleState)
@@ -103,6 +105,7 @@ class MonitorService : LifecycleService() {
 
             // Start output BLE writer
             bleWriter.start(settings.outputBleMac, settings.outputBleName, this)
+            BleSession.writer = bleWriter
 
             // Observe BLE state changes for notification updates
             launch {

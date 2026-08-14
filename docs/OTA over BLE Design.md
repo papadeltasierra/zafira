@@ -76,7 +76,8 @@ ESP32 → Android status notifications:
 
 Error reasons: `1` busy, `2` image too large, `3` bad chunk sequence,
 `4` flash write failure, `5` hash mismatch, `6` invalid image header,
-`7` timeout, `8` not permitted (no active session).
+`7` timeout, `8` not permitted (no active session), `9` device could not keep up
+(chunk queue overflow).
 
 ### 2.3 OTA Data (`…0907`)
 
@@ -92,8 +93,10 @@ with ERROR `3`; Android must then ABORT and restart the transfer.
 
 ### 2.4 Flow control and throughput
 
-- ATT MTU is raised for OTA: ESP32 preferred MTU becomes **517**; Android keeps
-  requesting the larger MTU and clamps all *existing* media/time payloads to the
+- ATT MTU is raised for OTA: ESP32 preferred MTU is **517**
+  (`CONFIG_ZAFIRA_BLE_MTU`, whose Kconfig range was widened from `23..256`, plus
+  `CONFIG_BT_NIMBLE_ATT_PREFERRED_MTU=517` and `CONFIG_BT_NIMBLE_MSYS1_BLOCK_COUNT=24`).
+  Android requests the same and clamps all *existing* media/time payloads to the
   current 128-byte limits, so the media contract is unchanged.
 - `max_chunk = negotiated_mtu - 3 (ATT header) - 2 (seq)`.
 - The device sends an ACK every `window_chunks` chunks (default 16). Android
@@ -164,9 +167,11 @@ States: `IDLE → RECEIVING → VERIFYING → COMMITTED`.
   `esp_ota_begin(part, image_size, &handle)`, reset SHA-256 context and counters,
   notify READY.
 - **Data chunk**: validate `seq == expected`, `esp_ota_write()`, feed the
-  `mbedtls` SHA-256 context, increment counters, notify ACK on the window
+  SHA-256 context, increment counters, notify ACK on the window
   boundary. Chunks are handed to a dedicated FreeRTOS OTA task through a queue,
-  never written from the NimBLE host callback.
+  never written from the NimBLE host callback. Hashing uses the PSA crypto API
+  (`psa_hash_*`); ESP-IDF v6 ships mbedTLS 4, which no longer exposes
+  `mbedtls/sha256.h`.
 - **COMMIT**: `esp_ota_end()` (which validates the image header/checksum),
   compare the computed SHA-256 against the one from START, then
   `esp_ota_set_boot_partition()`, notify COMMITTED, wait ~200 ms for the
@@ -192,25 +197,32 @@ slot automatically.
 
 | File | Role |
 |---|---|
-| `ble/OtaConstants.kt` | UUIDs, opcodes, window size, timeouts |
+| `ble/OtaProtocol.kt` | Opcodes, error text, `FirmwareInfo`, `OtaProgress` |
 | `ble/EspImageValidator.kt` | Local image parsing/validation, version extraction |
 | `ble/SemVer.kt` | Parse + compare, `0.0.0` fallback |
-| `ble/OtaTransferManager.kt` | OTA session state machine over `BleWriterManager`'s GATT |
-| `ui/FirmwareUpdateViewModel.kt` | Setup-page state: image list, validation, progress |
-| `ui/OtaProgressActivity.kt` (or a Setup dialog) | Progress bar UI |
+| `ble/OtaTransferManager.kt` | OTA session state machine over the `OtaGatt` bridge |
+| `ble/BleSession.kt` | Publishes the service-owned `BleWriterManager` to the UI |
+| `ui/FirmwareUpdateFlow.kt` | Image picking, validation, both confirmations, progress dialog |
 
-`BleWriterManager` gains: read/subscribe of Firmware Info, exposure of the
-`BluetoothGatt` to `OtaTransferManager`, a `suspendUserTraffic` flag, and an
-`activeFirmwareVersion: StateFlow<SemVer?>`.
+`BleConstants` gains the three UUIDs and `REQUESTED_MTU = 517`.
+`BleWriterManager` implements `OtaGatt` and gains: CCCD subscription for Firmware
+Info and OTA Control, an explicit Firmware Info read after discovery, per-write
+write types (OTA Control is write-with-response), an `otaActive` flag that
+suppresses media/time traffic and drops the inter-write settle delay, and
+`firmwareInfo: StateFlow<FirmwareInfo?>`.
+
+The GATT connection is owned by `MonitorService`, so `BleSession` exposes the
+live `BleWriterManager` to `SetupActivity` rather than opening a second link.
 
 ### 4.2 Image discovery
 
 `MANAGE_EXTERNAL_STORAGE` is already requested, so the primary path lists
 `Environment.getExternalStoragePublicDirectory(DIRECTORY_DOWNLOADS)` for
-`*.bin`, newest first. If the permission is not granted, fall back to
-`ACTION_OPEN_DOCUMENT` with `EXTRA_INITIAL_URI` pointing at Downloads; the
-resulting content URI is read through `ContentResolver`. No file outside the
-user's explicit selection is read.
+`*.bin`, newest first, in a selection dialog. When that permission is not held
+(notably on API 36, where the app no longer requests it) or the folder holds no
+`.bin` file, the flow falls back to `ACTION_OPEN_DOCUMENT`; the resulting content
+URI is read through `ContentResolver`. No file outside the user's explicit
+selection is read.
 
 ### 4.3 Local validation (before any BLE contact)
 
@@ -328,8 +340,10 @@ sequenceDiagram
 
 - The image is not signed. Anyone able to pair with the device can flash it.
   The GATT server already requires an encrypted, bonded link; OTA Control and
-  OTA Data must additionally carry `BLE_GATT_CHR_F_WRITE_ENC |
-  BLE_GATT_CHR_F_WRITE_AUTHEN` so an unbonded central cannot start a session.
+  OTA Data additionally carry `BLE_GATT_CHR_F_WRITE_ENC` so an unpaired central
+  cannot start a session. `BLE_GATT_CHR_F_WRITE_AUTHEN` is deliberately *not*
+  set: `sm_io_cap` is `BLE_SM_IO_CAP_NO_IO`, so pairing is Just Works and the
+  link is never MITM-authenticated; requiring it would reject every write.
 - Enabling ESP-IDF **Secure Boot v2** and signed app verification is the correct
   long-term control; the SHA-256 exchanged in START only protects against
   corruption, not against a malicious sender.

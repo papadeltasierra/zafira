@@ -6,4 +6,6 @@
     <color name="md_theme_surface">#FFFBFE</color>
     <!-- Matches the black surround of the launcher artwork so mask corners blend. -->
     <color name="ic_launcher_background">#000000</color>
+    <color name="ota_info">#1565C0</color>
+    <color name="ota_error">#B3261E</color>
 </resources>

@@ -15,11 +15,27 @@ config ZAFIRA_BLE_PROFILE_UUID
 
 config ZAFIRA_BLE_MTU
     int "BLE ATT MTU size (bytes)"
-    default 67
-    range 23 256
+    default 517
+    range 23 517
     help
         Preferred ATT MTU negotiated on each connection.
         The peer may agree on a smaller value.
+        517 is the ATT maximum and is needed for usable OTA throughput.
+
+config ZAFIRA_OTA_ACK_WINDOW
+    int "OTA chunks per acknowledgement"
+    default 16
+    range 1 64
+    help
+        Number of OTA data chunks the device accepts before notifying an ACK.
+        This is the transfer backpressure window.
+
+config ZAFIRA_OTA_TIMEOUT_S
+    int "OTA inactivity timeout (seconds)"
+    default 30
+    range 5 300
+    help
+        Abort an in-progress OTA session if no data arrives within this period.
 
 config ZAFIRA_DISPLAY_QUEUE_DEPTH
     int "Display message queue depth"

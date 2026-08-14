@@ -152,6 +152,37 @@
                 android:layout_marginTop="4dp"
                 android:text="@string/use_default_path" />
 
+            <!-- Firmware update section -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/section_firmware"
+                android:textAppearance="?attr/textAppearanceTitleMedium"
+                android:layout_marginTop="20dp"
+                android:layout_marginBottom="4dp" />
+
+            <TextView
+                android:id="@+id/text_device_firmware"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/firmware_unknown"
+                android:textAppearance="?attr/textAppearanceBodyMedium" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/firmware_hint_body"
+                android:textAppearance="?attr/textAppearanceBodySmall" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/button_update_firmware"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/firmware_select_image" />
+
             <!-- Save button -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/button_save"

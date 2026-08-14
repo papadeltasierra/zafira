@@ -13,6 +13,7 @@ import android.os.Environment
 import android.provider.Settings
 import android.view.Menu
 import android.view.MenuItem
+import android.view.View
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
@@ -21,9 +22,13 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.pioneermediabridge.ble.BleSession
+import com.pioneermediabridge.ble.OtaPhase
+import com.pioneermediabridge.ble.OtaProgress
 import com.pioneermediabridge.databinding.ActivityMainBinding
 import com.pioneermediabridge.service.MonitorService
 import com.pioneermediabridge.ui.MainViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
@@ -68,6 +73,41 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                // The writer only exists once the monitor service has started.
+                while (true) {
+                    val transfer = BleSession.writer?.otaTransfer
+                    if (transfer != null) {
+                        transfer.progress.collect { renderOtaBanner(it) }
+                    }
+                    delay(1_000)
+                }
+            }
+        }
+    }
+
+    private fun renderOtaBanner(progress: OtaProgress) {
+        val text = when (progress.phase) {
+            OtaPhase.REBOOTING -> {
+                if (BleSession.writer?.firmwareInfo?.value?.pendingVerify == true) {
+                    getString(R.string.ota_banner_verifying)
+                } else {
+                    getString(R.string.ota_banner_waiting)
+                }
+            }
+            OtaPhase.SUCCESS -> getString(R.string.ota_banner_success, progress.message)
+            OtaPhase.FAILED -> getString(R.string.ota_banner_failed, progress.message)
+            else -> null
+        }
+
+        binding.textOtaBanner.text = text.orEmpty()
+        binding.textOtaBanner.visibility = if (text == null) View.GONE else View.VISIBLE
+        binding.textOtaBanner.setTextColor(
+            if (progress.phase == OtaPhase.FAILED) getColor(R.color.ota_error)
+            else getColor(R.color.ota_info)
+        )
     }
 
     override fun onStart() {

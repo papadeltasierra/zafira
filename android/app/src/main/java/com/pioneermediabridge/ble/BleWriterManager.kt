@@ -19,21 +19,36 @@ import java.util.ArrayDeque
 enum class BleConnectionState { DISCONNECTED, SCANNING, CONNECTING, DISCOVERING, READY, ERROR }
 
 @SuppressLint("MissingPermission")
-class BleWriterManager(private val context: Context) {
+class BleWriterManager(private val context: Context) : OtaGatt {
 
     private val TAG = "BleWriterManager"
 
     private val _state = MutableStateFlow(BleConnectionState.DISCONNECTED)
     val connectionState: StateFlow<BleConnectionState> = _state.asStateFlow()
 
+    private val _firmwareInfo = MutableStateFlow<FirmwareInfo?>(null)
+    val firmwareInfo: StateFlow<FirmwareInfo?> = _firmwareInfo.asStateFlow()
+
     private var gatt: BluetoothGatt? = null
     private var mediaChar: BluetoothGattCharacteristic? = null
     private var timeChar: BluetoothGattCharacteristic? = null
     private var powerUpChar: BluetoothGattCharacteristic? = null
+    private var firmwareInfoChar: BluetoothGattCharacteristic? = null
+    private var otaControlChar: BluetoothGattCharacteristic? = null
+    private var otaDataChar: BluetoothGattCharacteristic? = null
     private var mtuRequestPending = false
+    private var negotiatedMtu = 23
+    private var otaActive = false
+
+    private data class PendingWrite(
+        val char: BluetoothGattCharacteristic,
+        val data: ByteArray,
+        val writeType: Int
+    )
 
     // Serialised write queue – only one outstanding write at a time
-    private val writeQueue = ArrayDeque<Pair<BluetoothGattCharacteristic, ByteArray>>()
+    private val writeQueue = ArrayDeque<PendingWrite>()
+    private val pendingSubscriptions = ArrayDeque<BluetoothGattCharacteristic>()
     private var writePending = false
 
     private var scope: CoroutineScope? = null
@@ -43,6 +58,10 @@ class BleWriterManager(private val context: Context) {
 
     private var targetMac: String = ""
     private var targetName: String = ""
+
+    /** Non-null once a monitoring session is running; drives the Setup page OTA flow. */
+    var otaTransfer: OtaTransferManager? = null
+        private set
 
     // ── GATT callbacks ────────────────────────────────────────────────────────
 
@@ -63,10 +82,15 @@ class BleWriterManager(private val context: Context) {
                     mediaChar = null
                     timeChar = null
                     powerUpChar = null
+                    firmwareInfoChar = null
+                    otaControlChar = null
+                    otaDataChar = null
                     writeQueue.clear()
+                    pendingSubscriptions.clear()
                     writePending = false
                     timeSyncJob?.cancel()
                     _state.value = BleConnectionState.DISCONNECTED
+                    otaTransfer?.onDisconnected()
                     scheduleReconnect()
                 }
             }
@@ -76,6 +100,7 @@ class BleWriterManager(private val context: Context) {
             mtuRequestPending = false
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 Log.i(TAG, "MTU negotiated: $mtu")
+                negotiatedMtu = mtu
             } else {
                 Log.w(TAG, "MTU negotiation failed: status=$status, mtu=$mtu")
             }
@@ -102,9 +127,71 @@ class BleWriterManager(private val context: Context) {
                 g.disconnect()
                 return
             }
-            Log.i(TAG, "Bridge service ready")
-            _state.value = BleConnectionState.READY
-            onReady()
+
+            // OTA characteristics are optional so the app still works with pre-OTA firmware.
+            firmwareInfoChar = svc.getCharacteristic(BleConstants.FIRMWARE_INFO_CHAR_UUID)
+            otaControlChar = svc.getCharacteristic(BleConstants.OTA_CONTROL_CHAR_UUID)
+            otaDataChar = svc.getCharacteristic(BleConstants.OTA_DATA_CHAR_UUID)
+            if (firmwareInfoChar == null) {
+                Log.w(TAG, "Device firmware predates OTA support; assuming version 0.0.0")
+                _firmwareInfo.value = FirmwareInfo(SemVer.ZERO, false, 0, 0)
+            }
+
+            pendingSubscriptions.clear()
+            firmwareInfoChar?.let { pendingSubscriptions.add(it) }
+            otaControlChar?.let { pendingSubscriptions.add(it) }
+            subscribeNext(g)
+        }
+
+        override fun onDescriptorWrite(
+            g: BluetoothGatt,
+            descriptor: BluetoothGattDescriptor,
+            status: Int
+        ) {
+            if (status != BluetoothGatt.GATT_SUCCESS) {
+                Log.w(TAG, "CCCD write failed on ${descriptor.characteristic.uuid}: $status")
+            }
+            subscribeNext(g)
+        }
+
+        override fun onCharacteristicRead(
+            g: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic,
+            value: ByteArray,
+            status: Int
+        ) {
+            handleRead(g, characteristic.uuid, value, status)
+        }
+
+        @Deprecated("Required for API < 33")
+        override fun onCharacteristicRead(
+            g: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic,
+            status: Int
+        ) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+                @Suppress("DEPRECATION")
+                handleRead(g, characteristic.uuid, characteristic.value ?: ByteArray(0), status)
+            }
+        }
+
+        override fun onCharacteristicChanged(
+            g: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic,
+            value: ByteArray
+        ) {
+            handleNotification(characteristic.uuid, value)
+        }
+
+        @Deprecated("Required for API < 33")
+        override fun onCharacteristicChanged(
+            g: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic
+        ) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+                @Suppress("DEPRECATION")
+                handleNotification(characteristic.uuid, characteristic.value ?: ByteArray(0))
+            }
         }
 
         override fun onCharacteristicWrite(
@@ -116,6 +203,10 @@ class BleWriterManager(private val context: Context) {
                 Log.w(TAG, "Write failed: status=$status on ${characteristic.uuid}")
             }
             writePending = false
+            if (otaActive) {
+                drainQueue()
+                return
+            }
             scope?.launch(Dispatchers.Main) {
                 delay(BleConstants.WRITE_SETTLE_MS)
                 drainQueue()
@@ -123,10 +214,93 @@ class BleWriterManager(private val context: Context) {
         }
     }
 
+    // ── Discovery chain ───────────────────────────────────────────────────────
+
+    private fun subscribeNext(g: BluetoothGatt) {
+        val char = pendingSubscriptions.poll()
+        if (char == null) {
+            readFirmwareInfoOrFinish(g)
+            return
+        }
+
+        val cccd = char.getDescriptor(BleConstants.CCCD_UUID)
+        if (cccd == null || !g.setCharacteristicNotification(char, true)) {
+            Log.w(TAG, "Cannot subscribe to ${char.uuid}")
+            subscribeNext(g)
+            return
+        }
+
+        val enable = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+        val started = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            g.writeDescriptor(cccd, enable) == BluetoothStatusCodes.SUCCESS
+        } else {
+            @Suppress("DEPRECATION")
+            run {
+                cccd.value = enable
+                g.writeDescriptor(cccd)
+            }
+        }
+        if (!started) subscribeNext(g)
+    }
+
+    private fun readFirmwareInfoOrFinish(g: BluetoothGatt) {
+        val char = firmwareInfoChar
+        if (char == null || !g.readCharacteristic(char)) {
+            markReady()
+        }
+    }
+
+    private fun handleRead(g: BluetoothGatt, uuid: java.util.UUID, value: ByteArray, status: Int) {
+        if (uuid == BleConstants.FIRMWARE_INFO_CHAR_UUID) {
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                parseFirmwareInfo(value)
+            } else {
+                Log.w(TAG, "Firmware info read failed: $status")
+            }
+            markReady()
+        }
+    }
+
+    private fun handleNotification(uuid: java.util.UUID, value: ByteArray) {
+        when (uuid) {
+            BleConstants.FIRMWARE_INFO_CHAR_UUID -> parseFirmwareInfo(value)
+            BleConstants.OTA_CONTROL_CHAR_UUID -> otaTransfer?.onControlNotification(value)
+        }
+    }
+
+    private fun parseFirmwareInfo(value: ByteArray) {
+        if (value.size < OtaProtocol.FIRMWARE_INFO_LEN) {
+            Log.w(TAG, "Firmware info payload too short: ${value.size}")
+            return
+        }
+        val buffer = ByteBuffer.wrap(value).order(ByteOrder.LITTLE_ENDIAN)
+        val version = SemVer(
+            value[0].toInt() and 0xFF,
+            value[1].toInt() and 0xFF,
+            value[2].toInt() and 0xFF
+        )
+        val info = FirmwareInfo(
+            version = version,
+            pendingVerify = (value[3].toInt() and 0xFF) == 1,
+            otaSlotSize = buffer.getInt(4),
+            maxChunk = buffer.getInt(8)
+        )
+        Log.i(TAG, "Device firmware $version (pendingVerify=${info.pendingVerify})")
+        _firmwareInfo.value = info
+        otaTransfer?.onFirmwareInfo(info)
+    }
+
+    private fun markReady() {
+        Log.i(TAG, "Bridge service ready")
+        _state.value = BleConnectionState.READY
+        onReady()
+    }
+
     // ── Public API ────────────────────────────────────────────────────────────
 
     fun start(mac: String, name: String, coroutineScope: CoroutineScope) {
         scope = coroutineScope
+        otaTransfer = OtaTransferManager(coroutineScope)
         targetMac = mac
         targetName = name
         initiateConnect()
@@ -141,16 +315,58 @@ class BleWriterManager(private val context: Context) {
         }
         gatt?.close()
         gatt = null
+        otaTransfer = null
+        _firmwareInfo.value = null
         _state.value = BleConnectionState.DISCONNECTED
     }
 
-    fun sendMediaInfo(info: MediaInfo) = enqueue(mediaChar, info.toBytes())
+    fun sendMediaInfo(info: MediaInfo) {
+        // Media updates are dropped while an image transfer owns the link.
+        if (otaActive) return
+        enqueue(mediaChar, info.toBytes())
+    }
+
+    // ── OtaGatt ────────────────────────────────────────────────────────────
+
+    override val chunkSize: Int
+        get() {
+            val deviceLimit = _firmwareInfo.value?.maxChunk ?: 0
+            val localLimit = negotiatedMtu - 3 - 2
+            return when {
+                deviceLimit > 0 -> minOf(deviceLimit, localLimit)
+                localLimit > 0 -> localLimit
+                else -> OtaProtocol.FALLBACK_CHUNK
+            }
+        }
+
+    override fun writeOtaControl(data: ByteArray): Boolean =
+        enqueue(otaControlChar, data, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
+
+    override fun writeOtaData(data: ByteArray): Boolean = enqueue(otaDataChar, data)
+
+    override fun setOtaActive(active: Boolean) {
+        otaActive = active
+        timeSyncJob?.let { if (active) it.cancel() }
+        gatt?.requestConnectionPriority(
+            if (active) BluetoothGatt.CONNECTION_PRIORITY_HIGH
+            else BluetoothGatt.CONNECTION_PRIORITY_BALANCED
+        )
+        if (!active) startTimeSync()
+    }
+
+    /** True when the connected device exposes the OTA characteristics. */
+    val supportsOta: Boolean get() = otaControlChar != null && otaDataChar != null
 
     // ── Internal helpers ──────────────────────────────────────────────────────
 
     private fun onReady() {
         sendPowerUp()
         sendTimeNow()
+        startTimeSync()
+    }
+
+    private fun startTimeSync() {
+        timeSyncJob?.cancel()
         timeSyncJob = scope?.launch {
             while (isActive) {
                 delay(BleConstants.TIME_SYNC_INTERVAL_MS)
@@ -170,6 +386,7 @@ class BleWriterManager(private val context: Context) {
     }
 
     private fun sendTimeNow() {
+        if (otaActive) return
         try {
             enqueue(timeChar, RdsClockTime.encode())
         } catch (e: IllegalArgumentException) {
@@ -177,25 +394,32 @@ class BleWriterManager(private val context: Context) {
         }
     }
 
-    private fun enqueue(char: BluetoothGattCharacteristic?, data: ByteArray) {
-        val c = char ?: return
-        if (_state.value != BleConnectionState.READY) return
-        writeQueue.add(Pair(c, data))
+    private fun enqueue(
+        char: BluetoothGattCharacteristic?,
+        data: ByteArray,
+        writeType: Int = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+    ): Boolean {
+        val c = char ?: return false
+        if (_state.value != BleConnectionState.READY) return false
+        writeQueue.add(PendingWrite(c, data, writeType))
         drainQueue()
+        return true
     }
 
     private fun drainQueue() {
         if (writePending || writeQueue.isEmpty()) return
-        val (char, data) = writeQueue.poll() ?: return
+        val pending = writeQueue.poll() ?: return
         val g = gatt ?: return
+        val char = pending.char
+        val data = pending.data
         writePending = true
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                g.writeCharacteristic(char, data, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE)
+                g.writeCharacteristic(char, data, pending.writeType)
             } else {
                 @Suppress("DEPRECATION")
                 char.value = data
-                char.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+                char.writeType = pending.writeType
                 @Suppress("DEPRECATION")
                 g.writeCharacteristic(char)
             }
@@ -215,10 +439,14 @@ class BleWriterManager(private val context: Context) {
         mediaChar = null
         timeChar = null
         powerUpChar = null
+        firmwareInfoChar = null
+        otaControlChar = null
+        otaDataChar = null
         writeQueue.clear()
         gatt?.close()
         gatt = null
         _state.value = BleConnectionState.DISCONNECTED
+        otaTransfer?.onDisconnected()
         scheduleReconnect()
     }
 
